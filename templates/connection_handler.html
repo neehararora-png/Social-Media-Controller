@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Connection Handler</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      font-family: Segoe UI, Arial, sans-serif;
+      background: #0b0d12;
+      color: #e6e6e6;
+      min-height: 100vh;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 28px 24px; }
+    .header { margin-bottom: 24px; }
+    .header h1 { margin: 0 0 6px; font-size: 30px; }
+    .header p { margin: 0; color: #8e97b0; }
+    .top-nav {
+      display: flex;
+      gap: 10px;
+      border-bottom: 1px solid #2a2f3d;
+      margin-bottom: 24px;
+    }
+    .tab-btn {
+      background: transparent;
+      color: #9aa3bb;
+      border: none;
+      border-bottom: 3px solid transparent;
+      padding: 14px 18px;
+      font-size: 15px;
+      cursor: pointer;
+      border-radius: 0;
+    }
+    .tab-btn.active {
+      color: #e6e6e6;
+      border-bottom-color: #7b4dff;
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .card {
+      background: #171b25;
+      border: 1px solid #2a2f3d;
+      border-radius: 14px;
+      padding: 22px;
+    }
+    .card h3 { margin: 0 0 16px; font-size: 18px; color: #d6d6d6; }
+    .form-group { margin-bottom: 18px; }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #9aa3bb;
+      font-size: 14px;
+    }
+    input[type="text"], select {
+      background: #10131b;
+      border: 1px solid #2a2f3d;
+      border-radius: 8px;
+      color: #e6e6e6;
+      padding: 10px 12px;
+      font-size: 15px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    input[type="text"]:focus, select:focus {
+      outline: none;
+      border-color: #7b4dff;
+    }
+    .account-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 12px;
+      padding: 12px;
+      background: #10131b;
+      border: 1px solid #2a2f3d;
+      border-radius: 10px;
+    }
+    .account-row .field { display: flex; flex-direction: column; }
+    .account-row .field label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+    .remove-btn {
+      background: #3e1f2b;
+      color: #ff7a8a;
+      border: 1px solid #5c2b3a;
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .add-btn {
+      background: #1f2638;
+      color: #9c83ff;
+      border: 1px dashed #4a4f63;
+      border-radius: 8px;
+      padding: 10px 16px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-top: 4px;
+    }
+    .save-btn {
+      background: #7b4dff;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 22px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-top: 18px;
+    }
+    .save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .connection-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .connection-card {
+      background: #10131b;
+      border: 1px solid #2a2f3d;
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .connection-card h4 {
+      margin: 0 0 12px;
+      font-size: 18px;
+      color: #e6e6e6;
+    }
+    .account-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #1a2030;
+      border: 1px solid #2a2f3d;
+      border-radius: 20px;
+      padding: 6px 12px;
+      margin: 0 8px 8px 0;
+      font-size: 13px;
+      color: #b7bfd2;
+    }
+    .account-chip .platform { color: #9c83ff; font-weight: 600; }
+    .empty-state {
+      color: #6b7280;
+      text-align: center;
+      padding: 40px 20px;
+    }
+    .edit-list-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      background: #10131b;
+      border: 1px solid #2a2f3d;
+      border-radius: 10px;
+      margin-bottom: 10px;
+    }
+    .edit-list-item h4 { margin: 0 0 4px; font-size: 16px; }
+    .edit-list-item p { margin: 0; color: #8e97b0; font-size: 13px; }
+    .edit-actions { display: flex; gap: 8px; }
+    .edit-actions button {
+      background: #252b3a;
+      color: #e6e6e6;
+      border: 1px solid #2a2f3d;
+      border-radius: 8px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .edit-actions .delete-btn {
+      background: #3e1f2b;
+      color: #ff7a8a;
+      border-color: #5c2b3a;
+    }
+    .status-msg {
+      margin-top: 14px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+    }
+    .status-msg.success { background: #1a3a2a; color: #7ee0a0; display: block; }
+    .status-msg.error { background: #3e1f2b; color: #ff7a8a; display: block; }
+    .back-link {
+      display: inline-block;
+      margin-bottom: 18px;
+      color: #9c83ff;
+      text-decoration: none;
+      font-size: 14px;
+    }
+    @media (max-width: 640px) {
+      .connection-grid { grid-template-columns: 1fr; }
+      .account-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back-link" href="/">← Back to modules</a>
+    <div class="header">
+      <h1>Connection Handler</h1>
+      <p>Central repository for social media account connections.</p>
+    </div>
+
+    <div class="top-nav">
+      <button class="tab-btn active" data-tab="dashboard">Existing connection Dashboard</button>
+      <button class="tab-btn" data-tab="create">Create new connections</button>
+      <button class="tab-btn" data-tab="edit">Edit existing connections</button>
+    </div>
+
+    <div id="tab-dashboard" class="tab-content active">
+      <div class="card">
+        <h3>Saved Connections</h3>
+        <div id="dashboard-list">
+          <div class="empty-state">Loading connections...</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-create" class="tab-content">
+      <div class="card">
+        <h3 id="create-title">Create new connection</h3>
+        <div class="form-group">
+          <label for="connection-name">Connection Name</label>
+          <input type="text" id="connection-name" placeholder="e.g. My Social Accounts" />
+        </div>
+        <div class="form-group">
+          <label>Social Media Accounts</label>
+          <div id="accounts-list"></div>
+          <button class="add-btn" id="add-account-btn">+ Add Social Media</button>
+        </div>
+        <button class="save-btn" id="save-connection-btn">Save Connection</button>
+        <div class="status-msg" id="create-status"></div>
+      </div>
+    </div>
+
+    <div id="tab-edit" class="tab-content">
+      <div class="card">
+        <h3>Edit existing connections</h3>
+        <div id="edit-list">
+          <div class="empty-state">Loading connections...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const PLATFORMS = ["TikTok", "Instagram", "Snapchat", "Youtube", "X(Twitter)", "Facebook"];
+    const accountsList = document.getElementById("accounts-list");
+    const dashboardList = document.getElementById("dashboard-list");
+    const editList = document.getElementById("edit-list");
+    const connectionNameInput = document.getElementById("connection-name");
+    const createTitle = document.getElementById("create-title");
+    const createStatus = document.getElementById("create-status");
+    let editingOriginalName = null;
+
+    document.querySelectorAll(".tab-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+        btn.classList.add("active");
+        document.getElementById(`tab-${btn.dataset.tab}`).classList.add("active");
+        if (btn.dataset.tab === "dashboard" || btn.dataset.tab === "edit") {
+          loadConnections();
+        }
+      });
+    });
+
+    function createAccountRow(platform = "", accountName = "") {
+      const row = document.createElement("div");
+      row.className = "account-row";
+      row.innerHTML = `
+        <div class="field">
+          <label>Platform</label>
+          <select class="platform-select">
+            <option value="" ${platform === "" ? "selected" : ""}>Select platform</option>
+            ${PLATFORMS.map(p => `<option value="${p}" ${p === platform ? "selected" : ""}>${p}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field">
+          <label>Account Name</label>
+          <input type="text" class="account-name-input" placeholder="@username or page name" value="${accountName.replace(/"/g, '&quot;')}" />
+        </div>
+        <button class="remove-btn" type="button">Remove</button>
+      `;
+      row.querySelector(".remove-btn").addEventListener("click", () => row.remove());
+      return row;
+    }
+
+    function resetCreateForm() {
+      connectionNameInput.value = "";
+      accountsList.innerHTML = "";
+      createStatus.className = "status-msg";
+      createStatus.textContent = "";
+      createTitle.textContent = "Create new connection";
+      editingOriginalName = null;
+      addAccountRow();
+    }
+
+    function addAccountRow(platform = "", accountName = "") {
+      accountsList.appendChild(createAccountRow(platform, accountName));
+    }
+
+    document.getElementById("add-account-btn").addEventListener("click", () => addAccountRow());
+
+    async function loadConnections() {
+      try {
+        const res = await fetch("/api/connections");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to load connections");
+        renderDashboard(data.connections || {});
+        renderEditList(data.connections || {});
+      } catch (e) {
+        dashboardList.innerHTML = `<div class="empty-state">Error loading connections: ${e.message}</div>`;
+        editList.innerHTML = `<div class="empty-state">Error loading connections: ${e.message}</div>`;
+      }
+    }
+
+    function renderDashboard(connections) {
+      const names = Object.keys(connections);
+      if (names.length === 0) {
+        dashboardList.innerHTML = `<div class="empty-state">No connections saved yet. Create one in the "Create new connections" tab.</div>`;
+        return;
+      }
+      dashboardList.innerHTML = `<div class="connection-grid">${names.map(name => {
+        const accounts = connections[name].accounts || [];
+        return `
+          <div class="connection-card">
+            <h4>${escapeHtml(name)}</h4>
+            <div>
+              ${accounts.map(acc => `
+                <span class="account-chip">
+                  <span class="platform">${escapeHtml(acc.platform)}</span>
+                  <span>${escapeHtml(acc.account_name)}</span>
+                </span>
+              `).join("")}
+            </div>
+          </div>
+        `;
+      }).join("")}</div>`;
+    }
+
+    function renderEditList(connections) {
+      const names = Object.keys(connections);
+      if (names.length === 0) {
+        editList.innerHTML = `<div class="empty-state">No connections to edit. Create one first.</div>`;
+        return;
+      }
+      editList.innerHTML = names.map(name => {
+        const accounts = connections[name].accounts || [];
+        return `
+          <div class="edit-list-item">
+            <div>
+              <h4>${escapeHtml(name)}</h4>
+              <p>${accounts.map(a => `${escapeHtml(a.platform)}: ${escapeHtml(a.account_name)}`).join(" | ")}</p>
+            </div>
+            <div class="edit-actions">
+              <button onclick="editConnection('${escapeHtml(name)}')">Edit</button>
+              <button class="delete-btn" onclick="deleteConnection('${escapeHtml(name)}')">Delete</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function escapeHtml(text) {
+      return String(text).replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
+    }
+
+    window.editConnection = async function(name) {
+      try {
+        const res = await fetch("/api/connections");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to load connection");
+        const conn = (data.connections || {})[name];
+        if (!conn) throw new Error("Connection not found");
+
+        editingOriginalName = name;
+        connectionNameInput.value = name;
+        accountsList.innerHTML = "";
+        (conn.accounts || []).forEach(acc => addAccountRow(acc.platform, acc.account_name));
+        if ((conn.accounts || []).length === 0) addAccountRow();
+
+        createTitle.textContent = `Editing: ${name}`;
+        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+        document.querySelector('[data-tab="create"]').classList.add("active");
+        document.getElementById("tab-create").classList.add("active");
+      } catch (e) {
+        alert("Error loading connection: " + e.message);
+      }
+    };
+
+    window.deleteConnection = async function(name) {
+      if (!confirm(`Delete connection "${name}"?`)) return;
+      try {
+        const res = await fetch(`/api/connections/${encodeURIComponent(name)}`, { method: "DELETE" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Delete failed");
+        loadConnections();
+      } catch (e) {
+        alert("Error deleting connection: " + e.message);
+      }
+    };
+
+    document.getElementById("save-connection-btn").addEventListener("click", async () => {
+      const name = connectionNameInput.value.trim();
+      if (!name) {
+        showStatus("Please enter a connection name.", "error");
+        return;
+      }
+
+      const rows = accountsList.querySelectorAll(".account-row");
+      const accounts = [];
+      const seen = new Set();
+      for (const row of rows) {
+        const platform = row.querySelector(".platform-select").value;
+        const accountName = row.querySelector(".account-name-input").value.trim();
+        if (!platform || !accountName) continue;
+        const key = `${platform}|${accountName}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        accounts.push({ platform, account_name: accountName });
+      }
+
+      if (accounts.length === 0) {
+        showStatus("Add at least one social media account.", "error");
+        return;
+      }
+
+      const payload = { name, accounts };
+      if (editingOriginalName && editingOriginalName !== name) {
+        payload.original_name = editingOriginalName;
+      }
+
+      try {
+        const res = await fetch("/api/connections", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Save failed");
+        showStatus("Connection saved successfully.", "success");
+        setTimeout(() => {
+          resetCreateForm();
+          document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+          document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+          document.querySelector('[data-tab="dashboard"]').classList.add("active");
+          document.getElementById("tab-dashboard").classList.add("active");
+          loadConnections();
+        }, 700);
+      } catch (e) {
+        showStatus("Error: " + e.message, "error");
+      }
+    });
+
+    function showStatus(message, type) {
+      createStatus.textContent = message;
+      createStatus.className = "status-msg " + type;
+    }
+
+    addAccountRow();
+    loadConnections();
+  </script>
+</body>
+</html>

@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Image Builder</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      font-family: Segoe UI, Arial, sans-serif;
+      background: #0b0d12;
+      color: #e6e6e6;
+      min-height: 100vh;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 28px 24px; }
+    .header { margin-bottom: 24px; }
+    .header h1 { margin: 0 0 6px; font-size: 30px; }
+    .header p { margin: 0; color: #8e97b0; }
+    .card {
+      background: #171b25;
+      border: 1px solid #2a2f3d;
+      border-radius: 14px;
+      padding: 22px;
+      margin-bottom: 20px;
+    }
+    .card h3 { margin: 0 0 16px; font-size: 18px; color: #d6d6d6; }
+    .form-group { margin-bottom: 18px; }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #9aa3bb;
+      font-size: 14px;
+    }
+    input[type="text"], textarea {
+      background: #10131b;
+      border: 1px solid #2a2f3d;
+      border-radius: 8px;
+      color: #e6e6e6;
+      padding: 10px 12px;
+      font-size: 15px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    input[type="file"] {
+      color: #e6e6e6;
+    }
+    input[type="text"]:focus, textarea:focus {
+      outline: none;
+      border-color: #7b4dff;
+    }
+    textarea { min-height: 100px; resize: vertical; }
+    .selected-files, .output-folder {
+      margin-top: 8px;
+      color: #b7bfd2;
+      font-size: 14px;
+    }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .toggle {
+      position: relative;
+      width: 52px;
+      height: 28px;
+      background: #2a2f3d;
+      border-radius: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle.on { background: #7b4dff; }
+    .toggle::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 22px;
+      height: 22px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    .toggle.on::after { transform: translateX(24px); }
+    .toggle-label { font-size: 15px; color: #e6e6e6; }
+    .hint { color: #6b7280; font-size: 13px; margin-top: 6px; }
+    .generate-btn {
+      background: #7b4dff;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 14px 28px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .generate-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .status-msg {
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+    }
+    .status-msg.success { background: #1a3a2a; color: #7ee0a0; display: block; }
+    .status-msg.error { background: #3e1f2b; color: #ff7a8a; display: block; }
+    .results { margin-top: 18px; }
+    .results h4 { margin: 0 0 10px; font-size: 16px; }
+    .results pre {
+      background: #0d1016;
+      border: 1px solid #2a2f3d;
+      border-radius: 10px;
+      padding: 12px;
+      overflow: auto;
+      color: #d2d8e8;
+      font-size: 13px;
+      max-height: 300px;
+    }
+    .back-link {
+      display: inline-block;
+      margin-bottom: 18px;
+      color: #9c83ff;
+      text-decoration: none;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back-link" href="/">← Back to modules</a>
+    <div class="header">
+      <h1>Image Builder</h1>
+      <p>Generate images from selected files using a built-in or custom prompt.</p>
+    </div>
+
+    <div class="card">
+      <h3>1. Select Input Files</h3>
+      <div class="form-group">
+        <label for="input-files">Choose files from your computer</label>
+        <input type="file" id="input-files" multiple />
+        <div class="selected-files" id="selected-files">No files selected</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>2. Select Output Folder</h3>
+      <div class="form-group">
+        <label for="output-folder-input">Choose output folder</label>
+        <input type="file" id="output-folder-input" webkitdirectory directory />
+        <div class="output-folder" id="selected-output-folder">No folder selected</div>
+        <input type="hidden" id="output-folder" value="output/image_builder_generated" />
+        <div class="hint">Click to browse and select a folder on your computer.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>3. Prompt Settings</h3>
+      <div class="toggle-row">
+        <div class="toggle" id="custom-prompt-toggle"></div>
+        <span class="toggle-label">Use custom prompt and API</span>
+      </div>
+      <div id="custom-prompt-area" style="display: none;">
+        <div class="form-group">
+          <label for="api-key">API Key</label>
+          <input type="text" id="api-key" placeholder="Enter your image generation API key" />
+        </div>
+        <div class="form-group">
+          <label for="custom-prompt">Custom Prompt</label>
+          <textarea id="custom-prompt" placeholder="Describe how you want the images generated..."></textarea>
+        </div>
+      </div>
+      <div id="hardcoded-prompt-area">
+        <div class="hint">Using the built-in hardcoded prompt. Disable custom prompt to keep this mode.</div>
+      </div>
+    </div>
+
+    <button class="generate-btn" id="generate-btn">Generate Images</button>
+    <div class="status-msg" id="status-msg"></div>
+
+    <div class="results" id="results" style="display: none;">
+      <h4>Generation Result</h4>
+      <pre id="result-json"></pre>
+    </div>
+  </div>
+
+  <script>
+    const inputFiles = document.getElementById('input-files');
+    const selectedFilesEl = document.getElementById('selected-files');
+    const outputFolder = document.getElementById('output-folder');
+    const outputFolderInput = document.getElementById('output-folder-input');
+    const selectedOutputFolderEl = document.getElementById('selected-output-folder');
+    const toggle = document.getElementById('custom-prompt-toggle');
+    const customArea = document.getElementById('custom-prompt-area');
+    const hardcodedArea = document.getElementById('hardcoded-prompt-area');
+    const customPromptInput = document.getElementById('custom-prompt');
+    const apiKeyInput = document.getElementById('api-key');
+    const generateBtn = document.getElementById('generate-btn');
+    const statusMsg = document.getElementById('status-msg');
+    const results = document.getElementById('results');
+    const resultJson = document.getElementById('result-json');
+
+    let useCustomPrompt = false;
+
+    inputFiles.addEventListener('change', () => {
+      const files = Array.from(inputFiles.files);
+      if (files.length === 0) {
+        selectedFilesEl.textContent = 'No files selected';
+      } else if (files.length === 1) {
+        selectedFilesEl.textContent = `Selected: ${files[0].name}`;
+      } else {
+        selectedFilesEl.textContent = `Selected ${files.length} files: ${files.map(f => f.name).join(', ')}`;
+      }
+    });
+
+    outputFolderInput.addEventListener('change', () => {
+      const files = Array.from(outputFolderInput.files);
+      if (files.length === 0) {
+        selectedOutputFolderEl.textContent = 'No folder selected';
+        outputFolder.value = '';
+      } else {
+        const first = files[0];
+        const relativePath = first.webkitRelativePath || '';
+        const folderName = relativePath.split('/')[0] || first.name;
+        outputFolder.value = folderName;
+        selectedOutputFolderEl.textContent = `Selected folder: ${folderName}`;
+      }
+    });
+
+    toggle.addEventListener('click', () => {
+      useCustomPrompt = !useCustomPrompt;
+      toggle.classList.toggle('on', useCustomPrompt);
+      customArea.style.display = useCustomPrompt ? 'block' : 'none';
+      hardcodedArea.style.display = useCustomPrompt ? 'none' : 'block';
+    });
+
+    function showStatus(message, type) {
+      statusMsg.textContent = message;
+      statusMsg.className = 'status-msg ' + type;
+    }
+
+    generateBtn.addEventListener('click', async () => {
+      const files = Array.from(inputFiles.files);
+      if (files.length === 0) {
+        showStatus('Please select at least one input file.', 'error');
+        return;
+      }
+
+      const folder = outputFolder.value.trim();
+      if (!folder) {
+        showStatus('Please enter an output folder path.', 'error');
+        return;
+      }
+
+      const formData = new FormData();
+      files.forEach(file => formData.append('files', file));
+      formData.append('output_folder', folder);
+      formData.append('use_custom_prompt', useCustomPrompt ? '1' : '0');
+      if (useCustomPrompt) {
+        formData.append('custom_prompt', customPromptInput.value.trim());
+        formData.append('api_key', apiKeyInput.value.trim());
+      }
+
+      generateBtn.disabled = true;
+      generateBtn.textContent = 'Generating...';
+      showStatus('Generation in progress...', 'success');
+
+      try {
+        const res = await fetch('/api/image-builder/generate', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Generation failed');
+        showStatus('Generation completed.', 'success');
+        results.style.display = 'block';
+        resultJson.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        showStatus('Error: ' + e.message, 'error');
+        results.style.display = 'none';
+      } finally {
+        generateBtn.disabled = false;
+        generateBtn.textContent = 'Generate Images';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Publish Work</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      font-family: Segoe UI, Arial, sans-serif;
+      background: #0b0d12;
+      color: #e6e6e6;
+      min-height: 100vh;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 28px 24px; }
+    .header { margin-bottom: 24px; }
+    .header h1 { margin: 0 0 6px; font-size: 30px; }
+    .header p { margin: 0; color: #8e97b0; }
+    .card {
+      background: #171b25;
+      border: 1px solid #2a2f3d;
+      border-radius: 14px;
+      padding: 22px;
+      margin-bottom: 20px;
+    }
+    .card h3 { margin: 0 0 16px; font-size: 18px; color: #d6d6d6; }
+    .form-group { margin-bottom: 18px; }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #9aa3bb;
+      font-size: 14px;
+    }
+    input[type="text"], select {
+      background: #10131b;
+      border: 1px solid #2a2f3d;
+      border-radius: 8px;
+      color: #e6e6e6;
+      padding: 10px 12px;
+      font-size: 15px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    input[type="file"] { color: #e6e6e6; }
+    select:focus, input[type="text"]:focus { outline: none; border-color: #7b4dff; }
+    .selected-files { margin-top: 8px; color: #b7bfd2; font-size: 14px; }
+    .hint { color: #6b7280; font-size: 13px; margin-top: 6px; }
+    .publish-btn {
+      background: #7b4dff;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 14px 28px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .publish-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .status-area { margin-top: 20px; }
+    .status-area h4 { margin: 0 0 12px; font-size: 16px; }
+    .platform-status {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: #10131b;
+      border: 1px solid #2a2f3d;
+      border-radius: 10px;
+      margin-bottom: 10px;
+    }
+    .platform-status .name { font-weight: 600; }
+    .badge {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 5px 10px;
+      border-radius: 6px;
+    }
+    .badge.pass { background: #1a3a2a; color: #7ee0a0; }
+    .badge.fail { background: #3e1f2b; color: #ff7a8a; }
+    .badge.pending { background: #22283a; color: #8e97b0; }
+    .badge.disabled { background: #151920; color: #4b5263; }
+    .status-msg {
+      margin-top: 14px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+    }
+    .status-msg.success { background: #1a3a2a; color: #7ee0a0; display: block; }
+    .status-msg.error { background: #3e1f2b; color: #ff7a8a; display: block; }
+    .back-link {
+      display: inline-block;
+      margin-bottom: 18px;
+      color: #9c83ff;
+      text-decoration: none;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back-link" href="/">← Back to modules</a>
+    <div class="header">
+      <h1>Publish Work</h1>
+      <p>Publish selected files to connected social media accounts.</p>
+    </div>
+
+    <div class="card">
+      <h3>1. Select Files to Publish</h3>
+      <div class="form-group">
+        <label for="publish-files">Choose files from your computer</label>
+        <input type="file" id="publish-files" multiple />
+        <div class="selected-files" id="selected-files">No files selected</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>2. Select Connection</h3>
+      <div class="form-group">
+        <label for="connection-select">Connection</label>
+        <select id="connection-select">
+          <option value="">Loading connections...</option>
+        </select>
+        <div class="hint">Choose a connection created in Connection Handler.</div>
+      </div>
+    </div>
+
+    <button class="publish-btn" id="publish-btn">Publish Work</button>
+    <div class="status-msg" id="status-msg"></div>
+
+    <div class="status-area" id="status-area" style="display: none;">
+      <h4>Upload Status</h4>
+      <div id="platform-status-list"></div>
+    </div>
+  </div>
+
+  <script>
+    const publishFiles = document.getElementById('publish-files');
+    const selectedFilesEl = document.getElementById('selected-files');
+    const connectionSelect = document.getElementById('connection-select');
+    const publishBtn = document.getElementById('publish-btn');
+    const statusMsg = document.getElementById('status-msg');
+    const statusArea = document.getElementById('status-area');
+    const platformStatusList = document.getElementById('platform-status-list');
+
+    const ALL_PLATFORMS = ['TikTok', 'Instagram', 'Snapchat', 'Youtube', 'X(Twitter)', 'Facebook'];
+    let connections = {};
+    let lastResults = {};
+
+    publishFiles.addEventListener('change', () => {
+      const files = Array.from(publishFiles.files);
+      if (files.length === 0) {
+        selectedFilesEl.textContent = 'No files selected';
+      } else if (files.length === 1) {
+        selectedFilesEl.textContent = `Selected: ${files[0].name}`;
+      } else {
+        selectedFilesEl.textContent = `Selected ${files.length} files: ${files.map(f => f.name).join(', ')}`;
+      }
+    });
+
+    async function loadConnections() {
+      try {
+        const res = await fetch('/api/connections');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to load connections');
+        connections = data.connections || {};
+        renderConnections();
+      } catch (e) {
+        connectionSelect.innerHTML = '<option value="">Error loading connections</option>';
+      }
+    }
+
+    function renderConnections() {
+      const names = Object.keys(connections);
+      if (names.length === 0) {
+        connectionSelect.innerHTML = '<option value="">No connections saved</option>';
+        updateStaticStatusList();
+        return;
+      }
+      connectionSelect.innerHTML = '<option value="">Select a connection</option>' + names.map(name =>
+        `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`
+      ).join('');
+      updateStaticStatusList();
+    }
+
+    function getSelectedAccountMap() {
+      const connectionName = connectionSelect.value;
+      if (!connectionName || !connections[connectionName]) return {};
+      const accounts = connections[connectionName].accounts || [];
+      const map = {};
+      accounts.forEach(acc => { map[acc.platform] = acc.account_name; });
+      return map;
+    }
+
+    function updateStaticStatusList() {
+      statusArea.style.display = 'block';
+      const accountMap = getSelectedAccountMap();
+      platformStatusList.innerHTML = ALL_PLATFORMS.map(platform => {
+        const hasAccount = accountMap.hasOwnProperty(platform);
+        const result = hasAccount ? (lastResults[platform] || { status: 'waiting' }) : { status: 'disabled' };
+        const statusClass = result.status;
+        const statusText = result.status === 'pass' ? 'Pass' : (result.status === 'fail' ? 'Fail' : (result.status === 'waiting' ? 'Waiting' : 'Disabled'));
+        const accountText = hasAccount ? `: ${escapeHtml(accountMap[platform])}` : '';
+        return `
+          <div class="platform-status">
+            <span class="name">${escapeHtml(platform)}${accountText}</span>
+            <span class="badge ${statusClass}">${statusText}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function escapeHtml(text) {
+      return String(text).replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
+    }
+
+    function showStatus(message, type) {
+      statusMsg.textContent = message;
+      statusMsg.className = 'status-msg ' + type;
+    }
+
+    function renderStatusList(accounts, results) {
+      lastResults = results || {};
+      updateStaticStatusList();
+    }
+
+    connectionSelect.addEventListener('change', () => {
+      lastResults = {};
+      updateStaticStatusList();
+    });
+
+    publishBtn.addEventListener('click', async () => {
+      const files = Array.from(publishFiles.files);
+      const connectionName = connectionSelect.value;
+
+      if (files.length === 0) {
+        showStatus('Please select at least one file.', 'error');
+        return;
+      }
+      if (!connectionName || !connections[connectionName]) {
+        showStatus('Please select a valid connection.', 'error');
+        return;
+      }
+
+      const accounts = connections[connectionName].accounts || [];
+      if (accounts.length === 0) {
+        showStatus('Selected connection has no accounts.', 'error');
+        return;
+      }
+
+      const formData = new FormData();
+      files.forEach(file => formData.append('files', file));
+      formData.append('connection_name', connectionName);
+
+      publishBtn.disabled = true;
+      publishBtn.textContent = 'Publishing...';
+      showStatus('Publishing in progress...', 'success');
+      lastResults = {};
+      updateStaticStatusList();
+
+      try {
+        const res = await fetch('/api/publish-work', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Publish failed');
+        showStatus('Publish completed. Check status below.', 'success');
+        lastResults = data.results || {};
+      } catch (e) {
+        showStatus('Error: ' + e.message, 'error');
+        lastResults = {};
+      } finally {
+        updateStaticStatusList();
+        publishBtn.disabled = false;
+        publishBtn.textContent = 'Publish Work';
+      }
+    });
+
+    loadConnections();
+  </script>
+</body>
+</html>

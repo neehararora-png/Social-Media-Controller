@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Social Content Pipeline</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin:0; font-family: Segoe UI, Arial, sans-serif; background:#0f1117; color:#e6e6e6; }
+    .wrap { max-width: 900px; margin: 40px auto; padding: 24px; }
+    .card { background:#171b25; border:1px solid #2a2f3d; border-radius:14px; padding:20px; }
+    h1 { margin:0 0 10px; font-size: 28px; }
+    p { color:#b7bfd2; }
+    button { background:#7b4dff; color:white; border:none; border-radius:10px; padding:12px 18px; font-size:16px; cursor:pointer; }
+    button:disabled { opacity:0.6; cursor:not-allowed; }
+    .btn-row { display:flex; flex-wrap:wrap; gap:10px; margin:12px 0 16px; }
+    .btn-secondary { background:#3e4868; }
+    .grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:12px; margin-top:16px; }
+    .kpi { background:#10131b; border:1px solid #2a2f3d; border-radius:10px; padding:14px; }
+    .label { color:#93a1c2; font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
+    .value { margin-top:8px; font-size:20px; font-weight:600; }
+    pre { background:#0d1016; border:1px solid #2a2f3d; border-radius:10px; padding:12px; overflow:auto; color:#d2d8e8; }
+    a { color:#9c83ff; }
+    .back-link {
+      display: inline-block;
+      margin-bottom: 18px;
+      color: #9c83ff;
+      text-decoration: none;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back-link" href="/">← Back to modules</a>
+    <div class="card">
+      <h1>Automated Social Media Flow</h1>
+      <p>Runs end-to-end: live scrape (all data) → JSON export → single demo image.</p>
+      <div class="btn-row">
+        <button id="runBtn">Run End-to-End</button>
+        <button id="cmcBtn" class="btn-secondary">Scrape CoinMarketCap</button>
+        <button id="teBtn" class="btn-secondary">Scrape TradingEconomics</button>
+        <button id="yahooBtn" class="btn-secondary">Scrape Yahoofinance</button>
+        <button id="imageBtn" class="btn-secondary">Image generator</button>
+      </div>
+
+      <div class="grid" id="kpis" style="display:none;">
+        <div class="kpi"><div class="label">Cryptos scraped</div><div class="value" id="kCrypto">-</div></div>
+        <div class="kpi"><div class="label">Market rows scraped</div><div class="value" id="kMarket">-</div></div>
+        <div class="kpi"><div class="label">Image generated</div><div class="value" id="kImage">-</div></div>
+      </div>
+
+      <h3>Output files</h3>
+      <pre id="files">Run pipeline to see files...</pre>
+
+      <h3>Button action results</h3>
+      <pre id="actions">Use any button to see action-specific output...</pre>
+    </div>
+  </div>
+
+  <script>
+    const runBtn = document.getElementById('runBtn');
+    const cmcBtn = document.getElementById('cmcBtn');
+    const teBtn = document.getElementById('teBtn');
+    const yahooBtn = document.getElementById('yahooBtn');
+    const imageBtn = document.getElementById('imageBtn');
+    const kpis = document.getElementById('kpis');
+    const filesEl = document.getElementById('files');
+    const actionsEl = document.getElementById('actions');
+
+    async function postAndRender(url) {
+      const res = await fetch(url, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Request failed');
+      return data;
+    }
+
+    async function runAction(button, label, url, renderFn) {
+      button.disabled = true;
+      const old = button.textContent;
+      button.textContent = 'Running...';
+      actionsEl.textContent = `${label} in progress...`;
+      try {
+        const data = await postAndRender(url);
+        renderFn(data);
+        actionsEl.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        actionsEl.textContent = `${label} failed: ${e.message}`;
+      } finally {
+        button.disabled = false;
+        button.textContent = old;
+      }
+    }
+
+    runBtn.addEventListener('click', async () => {
+      runBtn.disabled = true;
+      runBtn.textContent = 'Running...';
+      filesEl.textContent = 'Executing pipeline...';
+
+      try {
+        const data = await postAndRender('/api/run');
+
+        kpis.style.display = 'grid';
+        document.getElementById('kCrypto').textContent = data.counts.crypto;
+        document.getElementById('kMarket').textContent = data.counts.market;
+        document.getElementById('kImage').textContent = data.image.generated ? 'Yes' : 'No';
+
+        filesEl.textContent = JSON.stringify(data.files, null, 2);
+        actionsEl.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        filesEl.textContent = 'Error: ' + e.message;
+        actionsEl.textContent = 'Run End-to-End failed: ' + e.message;
+      } finally {
+        runBtn.disabled = false;
+        runBtn.textContent = 'Run End-to-End';
+      }
+    });
+
+    cmcBtn.addEventListener('click', () => runAction(
+      cmcBtn,
+      'CoinMarketCap scrape',
+      '/api/scrape/coinmarketcap',
+      (data) => {
+        filesEl.textContent = JSON.stringify(data.files, null, 2);
+        kpis.style.display = 'grid';
+        document.getElementById('kCrypto').textContent = data.counts.crypto ?? '-';
+      }
+    ));
+
+    teBtn.addEventListener('click', () => runAction(
+      teBtn,
+      'TradingEconomics scrape',
+      '/api/scrape/tradingeconomics',
+      (data) => {
+        filesEl.textContent = JSON.stringify(data.files, null, 2);
+        kpis.style.display = 'grid';
+        const total = Object.values(data.counts || {}).reduce((a, b) => a + b, 0);
+        document.getElementById('kMarket').textContent = total;
+      }
+    ));
+
+    yahooBtn.addEventListener('click', () => runAction(
+      yahooBtn,
+      'YahooFinance scrape',
+      '/api/scrape/yahoofinance',
+      (data) => {
+        filesEl.textContent = JSON.stringify(data.files, null, 2);
+        kpis.style.display = 'grid';
+        const total = Object.values(data.counts || {}).reduce((a, b) => a + b, 0);
+        document.getElementById('kMarket').textContent = total;
+      }
+    ));
+
+    imageBtn.addEventListener('click', () => runAction(
+      imageBtn,
+      'Image generation',
+      '/api/image-generator',
+      (data) => {
+        filesEl.textContent = JSON.stringify(data.files, null, 2);
+        kpis.style.display = 'grid';
+        document.getElementById('kImage').textContent = data.counts.images_created;
+      }
+    ));
+  </script>
+</body>
+</html>
