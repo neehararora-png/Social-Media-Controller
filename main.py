@@ -3,7 +3,8 @@ from scrapers.coinmarketcap_scraper import CoinMarketCapScraper
 from scrapers.tradingeconomics_scraper import TradingEconomicsScraper
 from scrapers.yahoofinance_scraper import YahooFinanceScraper
 from image_generator.image_generator import ImageGenerator
-from flask import Flask, jsonify, render_template, request
+from publisher.manager import PublisherManager
+from flask import Flask, jsonify, render_template, request, send_file
 import os
 import json
 from datetime import datetime
@@ -210,6 +211,11 @@ def publish_work():
     return render_template("publish_work.html")
 
 
+@app.get("/presentation")
+def presentation():
+    return render_template("presentation.html")
+
+
 @app.post("/api/run")
 def api_run():
     try:
@@ -337,38 +343,137 @@ def api_image_builder_generate():
         return jsonify({"error": str(exc)}), 500
 
 
+@app.post("/api/connections/validate")
+def api_validate_account():
+    try:
+        account = request.get_json(force=True) or {}
+        manager = PublisherManager()
+        result = manager.validate_account(account)
+        return jsonify(result), 200
+    except Exception as exc:
+        return jsonify({"valid": False, "simulated": False, "message": str(exc)}), 500
+
+
+@app.get("/api/available-images")
+def api_available_images():
+    try:
+        results = []
+        base_dirs = ["output/data", "output/generated_images", "output/uploads", "output/image_builder_generated"]
+        for base in base_dirs:
+            if not os.path.exists(base):
+                continue
+            for root, _, files in os.walk(base):
+                for f in files:
+                    if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+                        full_path = os.path.join(root, f)
+                        try:
+                            stat = os.stat(full_path)
+                            results.append({
+                                "filename": f,
+                                "path": full_path,
+                                "size_bytes": stat.st_size,
+                                "modified_at": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
+                                "folder": os.path.basename(root),
+                            })
+                        except Exception:
+                            pass
+        results.sort(key=lambda x: x.get("modified_at", ""), reverse=True)
+        return jsonify({"images": results[:50]}), 200
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.get("/api/media/preview")
+def api_media_preview():
+    path = request.args.get("path")
+    if not path or not os.path.exists(path):
+        return jsonify({"error": "File not found"}), 404
+    abs_target = os.path.abspath(path)
+    workspace = os.path.abspath(".")
+    if not abs_target.startswith(workspace):
+        return jsonify({"error": "Forbidden"}), 403
+    return send_file(abs_target)
+
+
+@app.get("/api/posts/history")
+def api_posts_history():
+    try:
+        status_filter = request.args.get("status")
+        manager = PublisherManager()
+        history = manager.get_history(status_filter=status_filter)
+        return jsonify({"history": history}), 200
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
 @app.post("/api/publish-work")
 def api_publish_work():
     try:
-        files = request.files.getlist("files") or []
         connection_name = (request.form.get("connection_name") or "").strip()
+        accounts_raw = request.form.get("accounts")
+        content = (request.form.get("content") or "").strip()
+        customizations_raw = request.form.get("platform_customizations")
+        schedule_time = (request.form.get("schedule_time") or "").strip() or None
+        is_draft = request.form.get("is_draft") == "1"
 
-        if not files:
-            return jsonify({"error": "No files uploaded"}), 400
-        if not connection_name:
-            return jsonify({"error": "Connection is required"}), 400
+        files = request.files.getlist("files") or []
+        existing_media_paths_raw = request.form.get("existing_media_paths")
 
-        connections = _load_connections()
-        connection = connections.get(connection_name)
-        if not connection:
-            return jsonify({"error": "Connection not found"}), 404
+        media_paths = []
+        upload_dir = os.path.join("output", "uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+        for f in files:
+            if not f.filename:
+                continue
+            safe_name = os.path.basename(f.filename)
+            out_path = os.path.join(upload_dir, f"{int(datetime.utcnow().timestamp())}_{safe_name}")
+            f.save(out_path)
+            media_paths.append(out_path)
 
-        accounts = connection.get("accounts") or []
-        if not accounts:
-            return jsonify({"error": "Selected connection has no accounts"}), 400
-
-        results = {}
-        for account in accounts:
-            platform = account.get("platform")
+        if existing_media_paths_raw:
             try:
-                if platform in {"TikTok", "Instagram", "Snapchat", "Youtube", "X(Twitter)", "Facebook"}:
-                    results[platform] = {"status": "pass", "message": f"Simulated upload to {platform}"}
-                else:
-                    results[platform] = {"status": "fail", "message": "Unsupported platform"}
-            except Exception as e:
-                results[platform] = {"status": "fail", "message": str(e)}
+                paths = json.loads(existing_media_paths_raw)
+                if isinstance(paths, list):
+                    for p in paths:
+                        if isinstance(p, str) and os.path.exists(p):
+                            media_paths.append(p)
+            except Exception:
+                pass
 
-        return jsonify({"success": True, "connection_name": connection_name, "results": results}), 200
+        accounts = []
+        if accounts_raw:
+            try:
+                accounts = json.loads(accounts_raw)
+            except Exception:
+                pass
+
+        if not accounts and connection_name:
+            connections = _load_connections()
+            conn = connections.get(connection_name)
+            if not conn:
+                return jsonify({"error": f"Connection '{connection_name}' not found"}), 404
+            accounts = conn.get("accounts") or []
+
+        if not accounts:
+            return jsonify({"error": "No accounts selected for publishing"}), 400
+
+        platform_customizations = {}
+        if customizations_raw:
+            try:
+                platform_customizations = json.loads(customizations_raw)
+            except Exception:
+                pass
+
+        manager = PublisherManager()
+        result = manager.publish_post(
+            accounts=accounts,
+            content=content,
+            media_paths=media_paths,
+            platform_customizations=platform_customizations,
+            schedule_time=schedule_time,
+            is_draft=is_draft,
+        )
+        return jsonify(result), 200
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 

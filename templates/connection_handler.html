@@ -3,20 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Connection Handler</title>
+  <title>Connection Handler - Social Media Controller</title>
   <style>
     :root { color-scheme: dark; }
     body {
       margin: 0;
-      font-family: Segoe UI, Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
       background: #0b0d12;
       color: #e6e6e6;
       min-height: 100vh;
     }
-    .wrap { max-width: 960px; margin: 0 auto; padding: 28px 24px; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 28px 24px; }
     .header { margin-bottom: 24px; }
-    .header h1 { margin: 0 0 6px; font-size: 30px; }
-    .header p { margin: 0; color: #8e97b0; }
+    .header h1 { margin: 0 0 6px; font-size: 30px; font-weight: 700; }
+    .header p { margin: 0; color: #8e97b0; font-size: 15px; }
     .top-nav {
       display: flex;
       gap: 10px;
@@ -30,11 +30,14 @@
       border-bottom: 3px solid transparent;
       padding: 14px 18px;
       font-size: 15px;
+      font-weight: 600;
       cursor: pointer;
       border-radius: 0;
+      transition: color 0.15s, border-color 0.15s;
     }
+    .tab-btn:hover { color: #d0d7e5; }
     .tab-btn.active {
-      color: #e6e6e6;
+      color: #ffffff;
       border-bottom-color: #7b4dff;
     }
     .tab-content { display: none; }
@@ -43,77 +46,132 @@
       background: #171b25;
       border: 1px solid #2a2f3d;
       border-radius: 14px;
-      padding: 22px;
+      padding: 24px;
     }
-    .card h3 { margin: 0 0 16px; font-size: 18px; color: #d6d6d6; }
-    .form-group { margin-bottom: 18px; }
+    .card h3 { margin: 0 0 16px; font-size: 18px; color: #e2e8f0; font-weight: 600; }
+    .form-group { margin-bottom: 20px; }
     label {
       display: block;
       margin-bottom: 8px;
       color: #9aa3bb;
       font-size: 14px;
+      font-weight: 500;
     }
-    input[type="text"], select {
+    input[type="text"], input[type="password"], select {
       background: #10131b;
       border: 1px solid #2a2f3d;
       border-radius: 8px;
       color: #e6e6e6;
-      padding: 10px 12px;
-      font-size: 15px;
+      padding: 10px 14px;
+      font-size: 14px;
       width: 100%;
       box-sizing: border-box;
+      transition: border-color 0.15s;
     }
-    input[type="text"]:focus, select:focus {
+    input[type="text"]:focus, input[type="password"]:focus, select:focus {
       outline: none;
       border-color: #7b4dff;
     }
-    .account-row {
+    .account-block {
+      background: #11141d;
+      border: 1px solid #272d3b;
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    .account-main-row {
       display: grid;
-      grid-template-columns: 1fr 1fr auto;
+      grid-template-columns: 180px 1fr auto;
       gap: 12px;
       align-items: center;
+    }
+    .creds-toggle {
+      margin-top: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #9c83ff;
+      cursor: pointer;
+      user-select: none;
+      width: fit-content;
+    }
+    .creds-toggle:hover { text-decoration: underline; }
+    .creds-box {
+      margin-top: 14px;
+      padding: 14px;
+      background: #0d1017;
+      border: 1px solid #222736;
+      border-radius: 8px;
+      display: none;
+    }
+    .creds-box.open { display: block; }
+    .creds-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
       margin-bottom: 12px;
-      padding: 12px;
-      background: #10131b;
-      border: 1px solid #2a2f3d;
-      border-radius: 10px;
     }
-    .account-row .field { display: flex; flex-direction: column; }
-    .account-row .field label {
+    .creds-hint {
       font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 6px;
+      color: #7b849b;
+      margin-top: 4px;
     }
+    .test-conn-btn {
+      background: #23293a;
+      color: #9c83ff;
+      border: 1px solid #363e54;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .test-conn-btn:hover { background: #2f374e; }
+    .test-status {
+      display: inline-block;
+      margin-left: 10px;
+      font-size: 12px;
+      vertical-align: middle;
+    }
+    .test-status.ok { color: #7ee0a0; }
+    .test-status.err { color: #ff7a8a; }
     .remove-btn {
       background: #3e1f2b;
       color: #ff7a8a;
       border: 1px solid #5c2b3a;
       border-radius: 8px;
-      padding: 8px 12px;
+      padding: 9px 14px;
       cursor: pointer;
       font-size: 13px;
     }
+    .remove-btn:hover { background: #4f2536; }
     .add-btn {
-      background: #1f2638;
+      background: #1a2030;
       color: #9c83ff;
-      border: 1px dashed #4a4f63;
+      border: 1px dashed #3e4661;
       border-radius: 8px;
-      padding: 10px 16px;
+      padding: 12px 18px;
       cursor: pointer;
       font-size: 14px;
-      margin-top: 4px;
+      font-weight: 600;
+      width: 100%;
     }
+    .add-btn:hover { background: #222b40; border-color: #7b4dff; }
     .save-btn {
       background: #7b4dff;
       color: white;
       border: none;
       border-radius: 10px;
-      padding: 12px 22px;
+      padding: 13px 26px;
       cursor: pointer;
-      font-size: 16px;
-      margin-top: 18px;
+      font-size: 15px;
+      font-weight: 600;
+      margin-top: 20px;
+      transition: opacity 0.15s;
     }
+    .save-btn:hover { opacity: 0.9; }
     .save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
     .connection-grid {
       display: grid;
@@ -121,29 +179,39 @@
       gap: 16px;
     }
     .connection-card {
-      background: #10131b;
-      border: 1px solid #2a2f3d;
+      background: #11141d;
+      border: 1px solid #272d3b;
       border-radius: 12px;
-      padding: 16px;
+      padding: 20px;
     }
     .connection-card h4 {
-      margin: 0 0 12px;
+      margin: 0 0 14px;
       font-size: 18px;
-      color: #e6e6e6;
+      color: #ffffff;
     }
     .account-chip {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       background: #1a2030;
-      border: 1px solid #2a2f3d;
-      border-radius: 20px;
-      padding: 6px 12px;
+      border: 1px solid #2a3142;
+      border-radius: 8px;
+      padding: 7px 12px;
       margin: 0 8px 8px 0;
       font-size: 13px;
       color: #b7bfd2;
     }
-    .account-chip .platform { color: #9c83ff; font-weight: 600; }
+    .account-chip .platform { color: #9c83ff; font-weight: 700; }
+    .account-chip .badge-mode {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+    .badge-mode.live { background: #1a3a2a; color: #7ee0a0; }
+    .badge-mode.sim { background: #272b38; color: #9aa3bb; }
     .empty-state {
       color: #6b7280;
       text-align: center;
@@ -153,19 +221,19 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 14px 16px;
-      background: #10131b;
-      border: 1px solid #2a2f3d;
+      padding: 16px;
+      background: #11141d;
+      border: 1px solid #272d3b;
       border-radius: 10px;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
     }
     .edit-list-item h4 { margin: 0 0 4px; font-size: 16px; }
     .edit-list-item p { margin: 0; color: #8e97b0; font-size: 13px; }
     .edit-actions { display: flex; gap: 8px; }
     .edit-actions button {
-      background: #252b3a;
+      background: #23293a;
       color: #e6e6e6;
-      border: 1px solid #2a2f3d;
+      border: 1px solid #363e54;
       border-radius: 8px;
       padding: 8px 14px;
       cursor: pointer;
@@ -178,7 +246,7 @@
     }
     .status-msg {
       margin-top: 14px;
-      padding: 10px 14px;
+      padding: 12px 16px;
       border-radius: 8px;
       font-size: 14px;
       display: none;
@@ -192,9 +260,11 @@
       text-decoration: none;
       font-size: 14px;
     }
-    @media (max-width: 640px) {
+    .platform-icon { font-size: 16px; margin-right: 2px; }
+    @media (max-width: 680px) {
       .connection-grid { grid-template-columns: 1fr; }
-      .account-row { grid-template-columns: 1fr; }
+      .account-main-row { grid-template-columns: 1fr; }
+      .creds-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -203,44 +273,47 @@
     <a class="back-link" href="/">← Back to modules</a>
     <div class="header">
       <h1>Connection Handler</h1>
-      <p>Central repository for social media account connections.</p>
+      <p>Configure social media accounts for X (Twitter), Instagram, Threads, Facebook, and TikTok.</p>
     </div>
 
     <div class="top-nav">
-      <button class="tab-btn active" data-tab="dashboard">Existing connection Dashboard</button>
-      <button class="tab-btn" data-tab="create">Create new connections</button>
-      <button class="tab-btn" data-tab="edit">Edit existing connections</button>
+      <button class="tab-btn active" data-tab="dashboard">Saved Connections</button>
+      <button class="tab-btn" data-tab="create">Create New Connection</button>
+      <button class="tab-btn" data-tab="edit">Manage & Edit</button>
     </div>
 
+    <!-- TAB: DASHBOARD -->
     <div id="tab-dashboard" class="tab-content active">
       <div class="card">
-        <h3>Saved Connections</h3>
+        <h3>Connected Channels</h3>
         <div id="dashboard-list">
           <div class="empty-state">Loading connections...</div>
         </div>
       </div>
     </div>
 
+    <!-- TAB: CREATE / EDIT FORM -->
     <div id="tab-create" class="tab-content">
       <div class="card">
-        <h3 id="create-title">Create new connection</h3>
+        <h3 id="create-title">Create New Connection Profile</h3>
         <div class="form-group">
-          <label for="connection-name">Connection Name</label>
-          <input type="text" id="connection-name" placeholder="e.g. My Social Accounts" />
+          <label for="connection-name">Connection Group Name</label>
+          <input type="text" id="connection-name" placeholder="e.g. Finance News Channels or Crypto Brand" />
         </div>
         <div class="form-group">
-          <label>Social Media Accounts</label>
+          <label>Social Media Channels</label>
           <div id="accounts-list"></div>
-          <button class="add-btn" id="add-account-btn">+ Add Social Media</button>
+          <button class="add-btn" id="add-account-btn">+ Add Channel (X, Instagram, Threads, Facebook, TikTok)</button>
         </div>
-        <button class="save-btn" id="save-connection-btn">Save Connection</button>
+        <button class="save-btn" id="save-connection-btn">Save Connection Profile</button>
         <div class="status-msg" id="create-status"></div>
       </div>
     </div>
 
+    <!-- TAB: EDIT LIST -->
     <div id="tab-edit" class="tab-content">
       <div class="card">
-        <h3>Edit existing connections</h3>
+        <h3>Existing Profiles</h3>
         <div id="edit-list">
           <div class="empty-state">Loading connections...</div>
         </div>
@@ -249,7 +322,16 @@
   </div>
 
   <script>
-    const PLATFORMS = ["TikTok", "Instagram", "Snapchat", "Youtube", "X(Twitter)", "Facebook"];
+    const PLATFORMS = [
+      { id: "X (Twitter)", label: "𝕏 X (Twitter)" },
+      { id: "Instagram", label: "📸 Instagram" },
+      { id: "Threads", label: "🧵 Threads" },
+      { id: "Facebook", label: "📘 Facebook" },
+      { id: "TikTok", label: "🎵 TikTok" },
+      { id: "YouTube", label: "▶️ YouTube" },
+      { id: "Snapchat", label: "👻 Snapchat" }
+    ];
+
     const accountsList = document.getElementById("accounts-list");
     const dashboardList = document.getElementById("dashboard-list");
     const editList = document.getElementById("edit-list");
@@ -258,6 +340,7 @@
     const createStatus = document.getElementById("create-status");
     let editingOriginalName = null;
 
+    // Tabs logic
     document.querySelectorAll(".tab-btn").forEach(btn => {
       btn.addEventListener("click", () => {
         document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
@@ -270,42 +353,168 @@
       });
     });
 
-    function createAccountRow(platform = "", accountName = "") {
-      const row = document.createElement("div");
-      row.className = "account-row";
-      row.innerHTML = `
-        <div class="field">
-          <label>Platform</label>
-          <select class="platform-select">
-            <option value="" ${platform === "" ? "selected" : ""}>Select platform</option>
-            ${PLATFORMS.map(p => `<option value="${p}" ${p === platform ? "selected" : ""}>${p}</option>`).join("")}
-          </select>
-        </div>
-        <div class="field">
-          <label>Account Name</label>
-          <input type="text" class="account-name-input" placeholder="@username or page name" value="${accountName.replace(/"/g, '&quot;')}" />
-        </div>
-        <button class="remove-btn" type="button">Remove</button>
-      `;
-      row.querySelector(".remove-btn").addEventListener("click", () => row.remove());
-      return row;
+    function getPlatformFields(platform) {
+      if (platform === "X (Twitter)") {
+        return [
+          { key: "api_key", label: "API Key (Consumer Key)", type: "password" },
+          { key: "api_secret", label: "API Secret (Consumer Secret)", type: "password" },
+          { key: "access_token", label: "Access Token", type: "password" },
+          { key: "access_token_secret", label: "Access Token Secret", type: "password" },
+        ];
+      }
+      if (platform === "Instagram") {
+        return [
+          { key: "account_id", label: "Instagram Business/Creator Account ID", type: "text" },
+          { key: "access_token", label: "Meta Graph User/Page Access Token", type: "password" },
+        ];
+      }
+      if (platform === "Threads") {
+        return [
+          { key: "threads_user_id", label: "Threads User ID", type: "text" },
+          { key: "access_token", label: "Threads User Access Token", type: "password" },
+        ];
+      }
+      if (platform === "Facebook") {
+        return [
+          { key: "page_id", label: "Facebook Page ID", type: "text" },
+          { key: "access_token", label: "Page Access Token", type: "password" },
+        ];
+      }
+      if (platform === "TikTok") {
+        return [
+          { key: "access_token", label: "TikTok User Access Token", type: "password" },
+          { key: "client_key", label: "TikTok Client Key", type: "text" },
+        ];
+      }
+      return [
+        { key: "access_token", label: "Access Token", type: "password" }
+      ];
     }
+
+    function createAccountBlock(platform = "X (Twitter)", accountName = "", credentials = {}) {
+      const block = document.createElement("div");
+      block.className = "account-block";
+
+      const hasCreds = Object.values(credentials || {}).some(v => Boolean(v));
+
+      block.innerHTML = `
+        <div class="account-main-row">
+          <div>
+            <label style="font-size: 11px; text-transform: uppercase;">Platform</label>
+            <select class="platform-select">
+              ${PLATFORMS.map(p => `<option value="${p.id}" ${p.id === platform ? "selected" : ""}>${p.label}</option>`).join("")}
+            </select>
+          </div>
+          <div>
+            <label style="font-size: 11px; text-transform: uppercase;">Account Handle / Page Name</label>
+            <input type="text" class="account-name-input" placeholder="@username or Page Name" value="${escapeHtml(accountName)}" />
+          </div>
+          <div>
+            <label style="font-size: 11px; visibility: hidden;">Action</label>
+            <button class="remove-btn" type="button">Remove</button>
+          </div>
+        </div>
+
+        <div class="creds-toggle">
+          <span class="toggle-icon">${hasCreds ? "▼" : "▶"}</span>
+          <span>API Credentials & Tokens (Optional for Sandbox Mode)</span>
+        </div>
+
+        <div class="creds-box ${hasCreds ? "open" : ""}">
+          <div class="creds-grid" id="creds-fields"></div>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 8px;">
+            <div class="creds-hint">💡 Leave blank to run this channel in Sandbox / Simulation mode.</div>
+            <div>
+              <button type="button" class="test-conn-btn">Validate Channel</button>
+              <span class="test-status"></span>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const platformSelect = block.querySelector(".platform-select");
+      const credsFields = block.querySelector("#creds-fields");
+      const credsToggle = block.querySelector(".creds-toggle");
+      const credsBox = block.querySelector(".creds-box");
+      const toggleIcon = block.querySelector(".toggle-icon");
+      const testBtn = block.querySelector(".test-conn-btn");
+      const testStatus = block.querySelector(".test-status");
+      const removeBtn = block.querySelector(".remove-btn");
+
+      removeBtn.addEventListener("click", () => block.remove());
+
+      credsToggle.addEventListener("click", () => {
+        const isOpen = credsBox.classList.toggle("open");
+        toggleIcon.textContent = isOpen ? "▼" : "▶";
+      });
+
+      function renderFields() {
+        const currentPlatform = platformSelect.value;
+        const fields = getPlatformFields(currentPlatform);
+        credsFields.innerHTML = fields.map(f => `
+          <div>
+            <label style="font-size: 12px;">${f.label}</label>
+            <input type="${f.type}" data-key="${f.key}" placeholder="${f.label}" value="${escapeHtml(credentials[f.key] || "")}" />
+          </div>
+        `).join("");
+      }
+
+      platformSelect.addEventListener("change", () => renderFields());
+      renderFields();
+
+      testBtn.addEventListener("click", async () => {
+        testStatus.textContent = "Testing...";
+        testStatus.className = "test-status";
+
+        const currentCreds = {};
+        credsFields.querySelectorAll("input").forEach(inp => {
+          const val = inp.value.trim();
+          if (val) currentCreds[inp.dataset.key] = val;
+        });
+
+        try {
+          const res = await fetch("/api/connections/validate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              platform: platformSelect.value,
+              account_name: block.querySelector(".account-name-input").value.trim() || "@user",
+              credentials: currentCreds,
+            }),
+          });
+          const data = await res.json();
+          if (data.valid) {
+            testStatus.className = "test-status ok";
+            testStatus.textContent = data.simulated ? "✓ Sandbox Active" : "✓ " + (data.message || "Connected");
+          } else {
+            testStatus.className = "test-status err";
+            testStatus.textContent = "✗ " + (data.message || "Invalid credentials");
+          }
+        } catch (e) {
+          testStatus.className = "test-status err";
+          testStatus.textContent = "✗ Request failed: " + e.message;
+        }
+      });
+
+      return block;
+    }
+
+    function addAccountRow(platform = "X (Twitter)", accountName = "", credentials = {}) {
+      accountsList.appendChild(createAccountBlock(platform, accountName, credentials));
+    }
+
+    document.getElementById("add-account-btn").addEventListener("click", () => addAccountRow());
 
     function resetCreateForm() {
       connectionNameInput.value = "";
       accountsList.innerHTML = "";
       createStatus.className = "status-msg";
       createStatus.textContent = "";
-      createTitle.textContent = "Create new connection";
+      createTitle.textContent = "Create New Connection Profile";
       editingOriginalName = null;
-      addAccountRow();
+      addAccountRow("X (Twitter)");
+      addAccountRow("Instagram");
     }
-
-    function addAccountRow(platform = "", accountName = "") {
-      accountsList.appendChild(createAccountRow(platform, accountName));
-    }
-
-    document.getElementById("add-account-btn").addEventListener("click", () => addAccountRow());
 
     async function loadConnections() {
       try {
@@ -315,15 +524,15 @@
         renderDashboard(data.connections || {});
         renderEditList(data.connections || {});
       } catch (e) {
-        dashboardList.innerHTML = `<div class="empty-state">Error loading connections: ${e.message}</div>`;
-        editList.innerHTML = `<div class="empty-state">Error loading connections: ${e.message}</div>`;
+        dashboardList.innerHTML = `<div class="empty-state">Error loading connections: ${escapeHtml(e.message)}</div>`;
+        editList.innerHTML = `<div class="empty-state">Error loading connections: ${escapeHtml(e.message)}</div>`;
       }
     }
 
     function renderDashboard(connections) {
       const names = Object.keys(connections);
       if (names.length === 0) {
-        dashboardList.innerHTML = `<div class="empty-state">No connections saved yet. Create one in the "Create new connections" tab.</div>`;
+        dashboardList.innerHTML = `<div class="empty-state">No connection profiles saved yet. Click "Create New Connection" to configure channels!</div>`;
         return;
       }
       dashboardList.innerHTML = `<div class="connection-grid">${names.map(name => {
@@ -332,12 +541,18 @@
           <div class="connection-card">
             <h4>${escapeHtml(name)}</h4>
             <div>
-              ${accounts.map(acc => `
-                <span class="account-chip">
-                  <span class="platform">${escapeHtml(acc.platform)}</span>
-                  <span>${escapeHtml(acc.account_name)}</span>
-                </span>
-              `).join("")}
+              ${accounts.map(acc => {
+                const hasCreds = acc.credentials && Object.values(acc.credentials).some(v => Boolean(v));
+                const modeClass = hasCreds ? "live" : "sim";
+                const modeText = hasCreds ? "Live API" : "Sandbox";
+                return `
+                  <span class="account-chip">
+                    <span class="platform">${escapeHtml(acc.platform)}</span>
+                    <span>${escapeHtml(acc.account_name)}</span>
+                    <span class="badge-mode ${modeClass}">${modeText}</span>
+                  </span>
+                `;
+              }).join("")}
             </div>
           </div>
         `;
@@ -355,11 +570,11 @@
         return `
           <div class="edit-list-item">
             <div>
-              <h4>${escapeHtml(name)}</h4>
-              <p>${accounts.map(a => `${escapeHtml(a.platform)}: ${escapeHtml(a.account_name)}`).join(" | ")}</p>
+              <h4 style="color:#ffffff;">${escapeHtml(name)}</h4>
+              <p>${accounts.map(a => `${escapeHtml(a.platform)}: ${escapeHtml(a.account_name)}`).join(" • ")}</p>
             </div>
             <div class="edit-actions">
-              <button onclick="editConnection('${escapeHtml(name)}')">Edit</button>
+              <button onclick="editConnection('${escapeHtml(name)}')">Edit Profile</button>
               <button class="delete-btn" onclick="deleteConnection('${escapeHtml(name)}')">Delete</button>
             </div>
           </div>
@@ -368,7 +583,7 @@
     }
 
     function escapeHtml(text) {
-      return String(text).replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
+      return String(text || "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
     }
 
     window.editConnection = async function(name) {
@@ -382,10 +597,10 @@
         editingOriginalName = name;
         connectionNameInput.value = name;
         accountsList.innerHTML = "";
-        (conn.accounts || []).forEach(acc => addAccountRow(acc.platform, acc.account_name));
+        (conn.accounts || []).forEach(acc => addAccountRow(acc.platform, acc.account_name, acc.credentials || {}));
         if ((conn.accounts || []).length === 0) addAccountRow();
 
-        createTitle.textContent = `Editing: ${name}`;
+        createTitle.textContent = `Editing Profile: ${name}`;
         document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
         document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
         document.querySelector('[data-tab="create"]').classList.add("active");
@@ -396,7 +611,7 @@
     };
 
     window.deleteConnection = async function(name) {
-      if (!confirm(`Delete connection "${name}"?`)) return;
+      if (!confirm(`Delete connection profile "${name}"?`)) return;
       try {
         const res = await fetch(`/api/connections/${encodeURIComponent(name)}`, { method: "DELETE" });
         const data = await res.json();
@@ -410,25 +625,28 @@
     document.getElementById("save-connection-btn").addEventListener("click", async () => {
       const name = connectionNameInput.value.trim();
       if (!name) {
-        showStatus("Please enter a connection name.", "error");
+        showStatus("Please enter a connection group name.", "error");
         return;
       }
 
-      const rows = accountsList.querySelectorAll(".account-row");
+      const blocks = accountsList.querySelectorAll(".account-block");
       const accounts = [];
-      const seen = new Set();
-      for (const row of rows) {
-        const platform = row.querySelector(".platform-select").value;
-        const accountName = row.querySelector(".account-name-input").value.trim();
+      for (const block of blocks) {
+        const platform = block.querySelector(".platform-select").value;
+        const accountName = block.querySelector(".account-name-input").value.trim();
         if (!platform || !accountName) continue;
-        const key = `${platform}|${accountName}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        accounts.push({ platform, account_name: accountName });
+
+        const credentials = {};
+        block.querySelectorAll("#creds-fields input").forEach(inp => {
+          const val = inp.value.trim();
+          if (val) credentials[inp.dataset.key] = val;
+        });
+
+        accounts.push({ platform, account_name: accountName, credentials });
       }
 
       if (accounts.length === 0) {
-        showStatus("Add at least one social media account.", "error");
+        showStatus("Add at least one social media channel with a handle/name.", "error");
         return;
       }
 
@@ -445,7 +663,7 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Save failed");
-        showStatus("Connection saved successfully.", "success");
+        showStatus("Connection profile saved successfully.", "success");
         setTimeout(() => {
           resetCreateForm();
           document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
@@ -453,9 +671,9 @@
           document.querySelector('[data-tab="dashboard"]').classList.add("active");
           document.getElementById("tab-dashboard").classList.add("active");
           loadConnections();
-        }, 700);
+        }, 600);
       } catch (e) {
-        showStatus("Error: " + e.message, "error");
+        showStatus("Error saving: " + e.message, "error");
       }
     });
 
@@ -464,7 +682,7 @@
       createStatus.className = "status-msg " + type;
     }
 
-    addAccountRow();
+    resetCreateForm();
     loadConnections();
   </script>
 </body>

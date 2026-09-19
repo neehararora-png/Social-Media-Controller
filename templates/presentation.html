@@ -1,0 +1,1648 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Social Media Subsystem — Architecture & Implementation Guide</title>
+  <meta name="description" content="Technical deep-dive on the Social Media multi-channel publisher, OAuth 1.0a HMAC-SHA1 signer, Meta Graph v20.0 container flows, Threads API, TikTok API v2, dual-mode simulation engine, and Buffer-style cross-posting architecture." />
+  <style>
+    :root {
+      --bg-primary: #0b0d12;
+      --bg-card: #141822;
+      --bg-card-hover: #1b212f;
+      --border-color: #242a3a;
+      --border-accent: #7b4dff;
+      --accent: #7b4dff;
+      --accent-gradient: linear-gradient(135deg, #7b4dff 0%, #00f2fe 100%);
+      --accent-glow: rgba(123, 77, 255, 0.35);
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --x-color: #ffffff;
+      --ig-color: #e1306c;
+      --fb-color: #1877f2;
+      --threads-color: #a855f7;
+      --tiktok-color: #00f2fe;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Top Progress Bar */
+    .progress-bar-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.05);
+      z-index: 100;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: var(--accent-gradient);
+      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Header Nav */
+    .top-header {
+      position: fixed;
+      top: 14px;
+      left: 28px;
+      right: 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 90;
+      pointer-events: none;
+    }
+    .top-header * { pointer-events: auto; }
+    .brand-badge {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(20, 24, 34, 0.9);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+    .brand-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent);
+    }
+    .header-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .hdr-btn {
+      background: rgba(20, 24, 34, 0.9);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      border-radius: 8px;
+      padding: 7px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .hdr-btn:hover {
+      color: var(--text-main);
+      border-color: var(--border-accent);
+      background: var(--bg-card-hover);
+    }
+
+    /* Deck Viewport */
+    .deck-container {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Individual Slide */
+    .slide {
+      position: absolute;
+      width: 100%;
+      max-width: 1280px;
+      height: 84vh;
+      max-height: 760px;
+      padding: 36px 54px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(16px) scale(0.985);
+      transition: opacity 0.35s ease, transform 0.35s ease, visibility 0.35s;
+      pointer-events: none;
+      overflow-y: auto;
+    }
+
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+
+    /* Slide Typography */
+    .slide-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      background: rgba(123, 77, 255, 0.15);
+      color: #b8a6ff;
+      border: 1px solid rgba(123, 77, 255, 0.3);
+      margin-bottom: 10px;
+      width: fit-content;
+    }
+    .slide-title {
+      font-size: 34px;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 8px;
+      background: linear-gradient(180deg, #ffffff 0%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .slide-subtitle {
+      font-size: 15px;
+      color: var(--text-muted);
+      margin-bottom: 22px;
+      max-width: 880px;
+      line-height: 1.55;
+    }
+
+    /* Layout Grids */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      align-items: stretch;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+    .grid-5 {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 20px;
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .card:hover {
+      border-color: rgba(123, 77, 255, 0.45);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+    .card.accented {
+      background: linear-gradient(145deg, rgba(123, 77, 255, 0.08) 0%, rgba(20, 24, 34, 0.95) 100%);
+      border-color: rgba(123, 77, 255, 0.35);
+    }
+    .card-icon {
+      font-size: 24px;
+      margin-bottom: 10px;
+      display: inline-block;
+    }
+    .card h3 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--text-main);
+    }
+    .card p {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* Pill Badges */
+    .pill {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+      margin-right: 4px;
+      margin-top: 4px;
+    }
+    .pill.success { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+    .pill.accent { background: rgba(123, 77, 255, 0.2); color: #c4b5fd; }
+    .pill.info { background: rgba(0, 242, 254, 0.15); color: #38bdf8; }
+    .pill.warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+
+    /* Code Blocks */
+    .code-box {
+      background: #080a0f;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 14px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11.5px;
+      color: #93c5fd;
+      line-height: 1.6;
+      overflow-x: auto;
+      position: relative;
+    }
+    .code-tag {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      font-size: 9.5px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      background: #141822;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    /* Platform Switcher Tabs */
+    .platform-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .plat-tab {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+    .plat-tab:hover {
+      border-color: var(--text-dim);
+      color: var(--text-main);
+    }
+    .plat-tab.active {
+      border-color: var(--accent);
+      background: rgba(123, 77, 255, 0.18);
+      color: #fff;
+    }
+
+    /* Interactive Live Meters */
+    .interactive-card {
+      background: #10131c;
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 18px;
+    }
+    .live-textarea {
+      width: 100%;
+      background: #080a0f;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: #f1f5f9;
+      padding: 12px;
+      font-family: inherit;
+      font-size: 13.5px;
+      resize: vertical;
+      min-height: 85px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .live-textarea:focus { border-color: var(--accent); }
+    .meter-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      margin-top: 6px;
+    }
+    .meter-bar-bg {
+      height: 5px;
+      background: #1c2230;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 3px;
+    }
+    .meter-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      transition: width 0.15s, background-color 0.2s;
+    }
+    .meter-bar-fill.over { background: var(--danger); }
+
+    /* Interactive Dispatch Simulator */
+    .sim-box {
+      background: #0d1017;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .sim-btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 15px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: opacity 0.2s;
+    }
+    .sim-btn:hover { opacity: 0.9; }
+    .sim-result-log {
+      background: #06080d;
+      border: 1px solid #1a202c;
+      border-radius: 8px;
+      padding: 12px;
+      font-family: ui-monospace, monospace;
+      font-size: 11.5px;
+      color: #94a3b8;
+      max-height: 180px;
+      overflow-y: auto;
+      line-height: 1.6;
+    }
+
+    /* Channel Selector Chips */
+    .channel-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #0a0d14;
+      border: 1px solid #242a3a;
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: all 0.15s;
+    }
+    .channel-chip.selected {
+      background: rgba(123, 77, 255, 0.2);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .channel-chip .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-dim);
+    }
+    .channel-chip.selected .dot {
+      background: var(--accent);
+    }
+
+    /* Bottom Controller Dock */
+    .dock-container {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(20, 24, 34, 0.94);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border-color);
+      border-radius: 28px;
+      padding: 6px 18px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+      z-index: 95;
+    }
+    .dock-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 15px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .dock-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .dock-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+    .slide-indicator {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-main);
+      min-width: 65px;
+      text-align: center;
+      letter-spacing: 0.05em;
+    }
+
+    /* Modal Slide Overview */
+    .overview-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(7, 9, 13, 0.94);
+      backdrop-filter: blur(16px);
+      z-index: 200;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+    }
+    .overview-modal.open { display: flex; }
+    .overview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 14px;
+      max-width: 1200px;
+      max-height: 80vh;
+      overflow-y: auto;
+      width: 100%;
+      padding: 10px;
+    }
+    .overview-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .overview-card:hover, .overview-card.current {
+      border-color: var(--accent);
+      transform: translateY(-3px);
+      box-shadow: 0 6px 18px rgba(123, 77, 255, 0.25);
+    }
+    .overview-num {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .overview-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    /* Keyboard Help Tooltip */
+    .kbd-tip {
+      font-size: 11px;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    kbd {
+      background: #1d2230;
+      border: 1px solid #333d52;
+      border-radius: 4px;
+      padding: 2px 5px;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* Print / PDF Styling */
+    @media print {
+      body {
+        overflow: visible !important;
+        height: auto !important;
+        width: 100% !important;
+        background: #0b0d12 !important;
+        color: #f1f5f9 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      .top-header, .dock-container, .progress-bar-container, .overview-modal {
+        display: none !important;
+      }
+      .deck-container {
+        display: block !important;
+        height: auto !important;
+        width: 100% !important;
+      }
+      .slide {
+        position: relative !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        transform: none !important;
+        height: auto !important;
+        min-height: 100vh !important;
+        max-height: none !important;
+        page-break-after: always !important;
+        break-after: page !important;
+        padding: 40px !important;
+        display: flex !important;
+      }
+      .card {
+        break-inside: avoid !important;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .slide { padding: 20px 24px; height: 90vh; }
+      .grid-2, .grid-3, .grid-4, .grid-5 { grid-template-columns: 1fr; }
+      .slide-title { font-size: 26px; }
+      .top-header { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Progress Line -->
+  <div class="progress-bar-container">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+
+  <!-- Header Branding & Quick Actions -->
+  <div class="top-header">
+    <div class="brand-badge">
+      <div class="brand-dot"></div>
+      <span>SOCIAL MEDIA CONTROLLER &bull; PUBLISHING SUBSYSTEM TECHNICAL ARCHITECTURE</span>
+    </div>
+    <div class="header-actions">
+      <button class="hdr-btn" onclick="toggleOverview()" title="View All Slides (O)">
+        <span>📑</span> All Slides
+      </button>
+      <button class="hdr-btn" onclick="window.print()" title="Print or Save as PDF (P)">
+        <span>🖨️</span> Export PDF
+      </button>
+      <button class="hdr-btn" onclick="toggleFullScreen()" title="Full Screen (F)">
+        <span>⛶</span> Full Screen
+      </button>
+      <button class="hdr-btn" onclick="toggleHelpModal()" title="Help &amp; Shortcuts">
+        <span>⌨️</span> Keys
+      </button>
+    </div>
+  </div>
+
+  <!-- Slides Container -->
+  <div class="deck-container" id="deckContainer">
+
+    <!-- SLIDE 1: Title Slide -->
+    <div class="slide active" data-slide="1">
+      <div class="slide-badge">TECHNICAL SYSTEM ARCHITECTURE &bull; PUBLISHING SUBSYSTEM</div>
+      <h1 class="slide-title" style="font-size: 46px; margin-bottom: 14px;">
+        Social Media Publishing Engine &amp;<br>
+        <span style="background: var(--accent-gradient); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">Multi-Platform Buffer Dispatcher</span>
+      </h1>
+      <p class="slide-subtitle" style="font-size: 17px; max-width: 880px; line-height: 1.6;">
+        A pure technical breakdown of the multi-channel cross-posting architecture. Covers the <strong>Abstract Factory &amp; Strategy pattern</strong>, pure-Python <strong>OAuth 1.0a HMAC-SHA1</strong> signing, <strong>Meta Graph v20.0 container flows</strong>, <strong>Threads &amp; TikTok v2 protocols</strong>, live character meters, and the dual-mode <strong>simulation sandbox</strong>.
+      </p>
+
+      <div class="grid-5" style="margin-top: 8px;">
+        <div class="card accented">
+          <div style="font-size:22px; margin-bottom:6px;">𝕏</div>
+          <h3>X (Twitter)</h3>
+          <p>OAuth 1.0a pure Python signer, v1.1 media upload, v2 tweet endpoint.</p>
+          <span class="pill accent">280 Chars</span>
+        </div>
+        <div class="card accented">
+          <div style="font-size:22px; margin-bottom:6px;">📸</div>
+          <h3>Instagram</h3>
+          <p>Meta Graph v20.0 two-phase media container publishing flow.</p>
+          <span class="pill info">2,200 Chars</span>
+        </div>
+        <div class="card accented">
+          <div style="font-size:22px; margin-bottom:6px;">🧵</div>
+          <h3>Threads</h3>
+          <p>Official Threads Graph API container creation &amp; publication.</p>
+          <span class="pill accent">500 Chars</span>
+        </div>
+        <div class="card accented">
+          <div style="font-size:22px; margin-bottom:6px;">📘</div>
+          <h3>Facebook</h3>
+          <p>Meta Graph API v20.0 Pages feed &amp; multi-part photo posts.</p>
+          <span class="pill success">63k Chars</span>
+        </div>
+        <div class="card accented">
+          <div style="font-size:22px; margin-bottom:6px;">🎵</div>
+          <h3>TikTok</h3>
+          <p>Content Posting API v2 init flow with privacy &amp; duet controls.</p>
+          <span class="pill info">4,000 Chars</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 2: Core Architecture & Class Hierarchy -->
+    <div class="slide" data-slide="2">
+      <div class="slide-badge">SYSTEM DESIGN &bull; PATTERNS</div>
+      <h2 class="slide-title">Architecture: Strategy &amp; Factory Patterns</h2>
+      <p class="slide-subtitle">
+        Decoupled, extensible architecture separating orchestrator business logic from platform protocols.
+      </p>
+
+      <div class="grid-2">
+        <div class="card" style="display:flex; flex-direction:column; justify-content:space-between;">
+          <div>
+            <h3>🏛️ The Publisher Class Hierarchy</h3>
+            <p style="margin-bottom: 12px;">Unified abstraction layer defined in <code>publisher/base.py</code>:</p>
+            <div class="code-box" style="font-size:12px;">
+<span style="color:#c678dd;">class</span> <span style="color:#61afef;">BasePublisher</span>(ABC):
+    <span style="color:#5c6370;"># Abstract methods required by every platform</span>
+    <span style="color:#e5c07b;">@abstractmethod</span>
+    <span style="color:#c678dd;">def</span> <span style="color:#61afef;">validate_credentials</span>(self) -&gt; Dict[str, Any]: ...
+
+    <span style="color:#e5c07b;">@abstractmethod</span>
+    <span style="color:#c678dd;">def</span> <span style="color:#61afef;">publish</span>(self, content, media_paths, options) -&gt; PublishResult: ...
+
+    <span style="color:#c678dd;">def</span> <span style="color:#61afef;">is_configured</span>(self) -&gt; bool: ...
+            </div>
+          </div>
+          <div style="margin-top:14px; font-size:12.5px; color:var(--text-muted); line-height:1.6;">
+            &bull; <strong>Concrete Publishers</strong>: <code>XPublisher</code>, <code>FacebookPublisher</code>, <code>InstagramPublisher</code>, <code>ThreadsPublisher</code>, <code>TikTokPublisher</code>, and fallback <code>_GenericPlatformPublisher</code>.
+          </div>
+        </div>
+
+        <div class="card" style="display:flex; flex-direction:column; justify-content:space-between;">
+          <div>
+            <h3>🎛️ PublisherManager: The Central Dispatcher</h3>
+            <p style="margin-bottom: 12px;">Located in <code>publisher/manager.py</code>:</p>
+            <ul style="font-size: 13px; color: var(--text-muted); line-height: 1.8; margin-left: 20px;">
+              <li><strong>Factory Routing</strong>: <code>create_publisher()</code> normalizes platform strings (e.g. <code>"x"</code>, <code>"twitter"</code> &rarr; <code>"X (Twitter)"</code>).</li>
+              <li><strong>Concurrent Dispatch</strong>: Dispatches common or customized copy to each account.</li>
+              <li><strong>Audit Trail</strong>: Automatically records results in <code>output/posts_history.json</code>.</li>
+              <li><strong>Draft &amp; Schedule Lifecycle</strong>: Handles immediate dispatch, draft saving, and scheduled times.</li>
+            </ul>
+          </div>
+          <div style="margin-top:14px; padding:10px; background:#10141f; border-left:3px solid var(--accent); border-radius:4px; font-size:12px; color:#c4b5fd;">
+            New social channels can be plugged in by creating a subclass of <code>BasePublisher</code> with zero changes to existing network logic.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 3: Standardized Data Models & Audit Trail -->
+    <div class="slide" data-slide="3">
+      <div class="slide-badge">DATA CONTRACTS &bull; AUDIT TRAIL</div>
+      <h2 class="slide-title">Standardized PublishResult &amp; History Schema</h2>
+      <p class="slide-subtitle">
+        Consistent output structures across all platforms for error isolation and full execution traceability.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>📦 PublishResult Dataclass (publisher/base.py)</h3>
+          <p style="margin-bottom: 10px;">Every publisher returns this identical dataclass:</p>
+          <div class="code-box" style="font-size:11.5px;">
+<span style="color:#e5c07b;">@dataclass</span>
+<span style="color:#c678dd;">class</span> <span style="color:#61afef;">PublishResult</span>:
+    platform: str
+    account_name: str
+    success: bool
+    post_id: Optional[str] = <span style="color:#d19a66;">None</span>
+    post_url: Optional[str] = <span style="color:#d19a66;">None</span>
+    message: str = <span style="color:#98c379;">""</span>
+    simulated: bool = <span style="color:#d19a66;">False</span>
+    timestamp: str = field(default_factory=...)
+    raw_response: Optional[Dict[str, Any]] = <span style="color:#d19a66;">None</span>
+          </div>
+          <p style="font-size:12px; color:var(--text-dim); margin-top:8px;">
+            Converts cleanly to JSON dictionary via <code>result.to_dict()</code>.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>📝 Audit Log Record (output/posts_history.json)</h3>
+          <p style="margin-bottom: 10px;">Sample recorded audit record:</p>
+          <div class="code-box" style="font-size:11px;">
+{
+  <span style="color:#e06c75;">"id"</span>: <span style="color:#98c379;">"3e04fe70-f5d1-4e22-971a-95ebbf1f019e"</span>,
+  <span style="color:#e06c75;">"status"</span>: <span style="color:#98c379;">"published"</span>, <span style="color:#5c6370;">// "published" | "partial_failure" | "draft" | "scheduled"</span>
+  <span style="color:#e06c75;">"content"</span>: <span style="color:#98c379;">"Bitcoin crosses new high! #crypto"</span>,
+  <span style="color:#e06c75;">"media_files"</span>: [<span style="color:#98c379;">"1789434003_market_chart.png"</span>],
+  <span style="color:#e06c75;">"results"</span>: {
+    <span style="color:#e06c75;">"X (Twitter) (@CryptoAlertsDaily)"</span>: {
+      <span style="color:#e06c75;">"success"</span>: <span style="color:#d19a66;">true</span>,
+      <span style="color:#e06c75;">"post_id"</span>: <span style="color:#98c379;">"1896694935599354582"</span>,
+      <span style="color:#e06c75;">"post_url"</span>: <span style="color:#98c379;">"https://x.com/CryptoAlertsDaily/status/1896..."</span>
+    }
+  }
+}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 4: X (Twitter) Engine Deep Dive -->
+    <div class="slide" data-slide="4">
+      <div class="slide-badge">PLATFORM PROTOCOL &bull; X (TWITTER)</div>
+      <h2 class="slide-title">X (Twitter) Engine &amp; Pure Python OAuth 1.0a</h2>
+      <p class="slide-subtitle">
+        Zero external OAuth library bloat: hand-crafted RFC 3986 percent encoding &amp; HMAC-SHA1 signer.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>🔐 Pure-Python OAuth 1.0a (publisher/oauth_helper.py)</h3>
+          <p style="margin-bottom: 10px;">Cryptographic signing protocol:</p>
+          <div class="code-box" style="font-size:11px; line-height:1.6;">
+<span style="color:#5c6370;"># 1. Collect query + body + oauth params</span>
+<span style="color:#5c6370;"># 2. RFC 3986 percent-encode and sort lexicographically</span>
+param_string = <span style="color:#98c379;">"&amp;"</span>.join(f<span style="color:#98c379;">"{k}={v}"</span> <span style="color:#c678dd;">for</span> k, v <span style="color:#c678dd;">in</span> sorted_encoded)
+
+<span style="color:#5c6370;"># 3. Form Signature Base String</span>
+base_string = f<span style="color:#98c379;">"{METHOD}&amp;{rfc_quote(url)}&amp;{rfc_quote(param_string)}"</span>
+
+<span style="color:#5c6370;"># 4. Generate HMAC-SHA1 digest using consumer_secret &amp; token_secret</span>
+key = f<span style="color:#98c379;">"{rfc_quote(secret)}&amp;{rfc_quote(token_secret)}"</span>
+hashed = hmac.new(key.encode(), base_string.encode(), hashlib.sha1)
+sig = base64.b64encode(hashed.digest()).decode()
+
+<span style="color:#5c6370;"># 5. Build Authorization Header</span>
+<span style="color:#c678dd;">return</span> f<span style="color:#98c379;">'OAuth oauth_consumer_key="...", oauth_signature="{sig}"...'</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🚀 Two-Stage Publishing Flow</h3>
+          <div style="display:flex; flex-direction:column; gap:12px; font-size:13px; color:var(--text-muted); line-height:1.6;">
+            <div>
+              <strong style="color:var(--text-main);">1. Character Boundary Enforcement</strong><br>
+              Strict 280-character ceiling checked before any network call.
+            </div>
+            <div>
+              <strong style="color:var(--text-main);">2. Multipart Media Upload (v1.1 API)</strong><br>
+              <code>POST https://upload.twitter.com/1.1/media/upload.json</code><br>
+              Uploads binary image stream with OAuth 1.0a header &rarr; receives <code>media_id_string</code>.
+            </div>
+            <div>
+              <strong style="color:var(--text-main);">3. Tweet Dispatch (v2 API)</strong><br>
+              <code>POST https://api.twitter.com/2/tweets</code><br>
+              JSON payload: <code>{"text": content, "media": {"media_ids": [...]}}</code>.
+            </div>
+            <div>
+              <strong style="color:var(--text-main);">4. User Identity Validation</strong><br>
+              Live health check via <code>GET /2/users/me</code> confirms active handle.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 5: Meta Graph API (Facebook & Instagram) -->
+    <div class="slide" data-slide="5">
+      <div class="slide-badge">PLATFORM PROTOCOL &bull; META GRAPH V20.0</div>
+      <h2 class="slide-title">Facebook Pages &amp; Instagram Business Flows</h2>
+      <p class="slide-subtitle">
+        Integrating Meta Graph API v20.0 for direct page feed publishing and Instagram container flows.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>📘 Facebook Pages Publisher</h3>
+          <p style="margin-bottom: 12px;">Uses Page Access Tokens with 63,206-character allowance:</p>
+          <div style="display:flex; flex-direction:column; gap:10px; font-size:12.5px; color:var(--text-muted); line-height:1.6;">
+            <div>
+              <strong style="color:var(--text-main);">With Media:</strong><br>
+              <code>POST https://graph.facebook.com/v20.0/{page_id}/photos</code><br>
+              Multipart stream containing binary image file + <code>caption</code> parameter.
+            </div>
+            <div>
+              <strong style="color:var(--text-main);">Text-Only:</strong><br>
+              <code>POST https://graph.facebook.com/v20.0/{page_id}/feed</code><br>
+              Form body containing <code>message</code> and Page Access Token.
+            </div>
+            <div>
+              <strong style="color:var(--text-main);">Validation:</strong><br>
+              <code>GET /{page_id}?fields=id,name,link</code> verifies page existence.
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>📸 Instagram Container Architecture</h3>
+          <p style="margin-bottom: 12px;">Enforces mandatory media and a two-phase publishing lifecycle:</p>
+          <div style="display:flex; flex-direction:column; gap:10px; font-size:12.5px; color:var(--text-muted); line-height:1.6;">
+            <div>
+              <strong style="color:var(--text-main);">Phase 1 &bull; Create Media Container:</strong><br>
+              <code>POST https://graph.facebook.com/v20.0/{ig_user_id}/media</code><br>
+              Payload: <code>image_url</code> (publicly accessible URL) + <code>caption</code> (&le; 2,200 chars). Returns <code>creation_id</code>.
+            </div>
+            <div>
+              <strong style="color:var(--text-main);">Phase 2 &bull; Media Container Publish:</strong><br>
+              <code>POST https://graph.facebook.com/v20.0/{ig_user_id}/media_publish</code><br>
+              Payload: <code>creation_id</code> + Page Access Token.
+            </div>
+            <div>
+              <strong style="color:var(--text-main);">Permalink Generation:</strong><br>
+              Resolves permalink to standard shortcode format <code>/p/{shortcode}/</code>.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 6: Threads & TikTok APIs -->
+    <div class="slide" data-slide="6">
+      <div class="slide-badge">PLATFORM PROTOCOL &bull; THREADS &amp; TIKTOK</div>
+      <h2 class="slide-title">Threads API &amp; TikTok Content Posting v2</h2>
+      <p class="slide-subtitle">
+        Support for modern conversational text and short-form video/photo networks.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>🧵 Threads API (graph.threads.net/v1.0)</h3>
+          <p style="margin-bottom: 10px;">Two-phase container architecture with 500-character ceiling:</p>
+          <div class="code-box" style="font-size:11px; line-height:1.6;">
+<span style="color:#5c6370;">// Phase 1: Create Item Container</span>
+POST https://graph.threads.net/v1.0/{threads_user_id}/threads
+Payload: {
+  <span style="color:#e06c75;">"media_type"</span>: <span style="color:#98c379;">"IMAGE"</span>, <span style="color:#5c6370;">// or "TEXT"</span>
+  <span style="color:#e06c75;">"text"</span>: content,
+  <span style="color:#e06c75;">"image_url"</span>: public_url
+}
+<span style="color:#5c6370;">// -> Returns creation_id</span>
+
+<span style="color:#5c6370;">// Phase 2: Dispatch Container</span>
+POST https://graph.threads.net/v1.0/{threads_user_id}/threads_publish
+Payload: { <span style="color:#e06c75;">"creation_id"</span>: creation_id }
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🎵 TikTok Content Posting API v2</h3>
+          <p style="margin-bottom: 10px;">Direct creator publishing via Bearer Token:</p>
+          <div class="code-box" style="font-size:11px; line-height:1.6;">
+<span style="color:#5c6370;">// Content Initialization</span>
+POST https://open.tiktokapis.com/v2/post/publish/content/init/
+Headers: { <span style="color:#e06c75;">"Authorization"</span>: <span style="color:#98c379;">"Bearer act.tiktok_token"</span> }
+Payload: {
+  <span style="color:#e06c75;">"post_info"</span>: {
+    <span style="color:#e06c75;">"title"</span>: content[:2200],
+    <span style="color:#e06c75;">"privacy_level"</span>: <span style="color:#98c379;">"PUBLIC_TO_EVERYONE"</span>,
+    <span style="color:#e06c75;">"disable_duet"</span>: <span style="color:#d19a66;">false</span>,
+    <span style="color:#e06c75;">"disable_stitch"</span>: <span style="color:#d19a66;">false</span>
+  },
+  <span style="color:#e06c75;">"source_info"</span>: { <span style="color:#e06c75;">"source"</span>: <span style="color:#98c379;">"PULL_FROM_URL"</span>, <span style="color:#e06c75;">"photo_images"</span>: [...] }
+}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 7: The Dual-Mode Simulation Engine -->
+    <div class="slide" data-slide="7">
+      <div class="slide-badge">ENGINEERING HIGHLIGHT &bull; SANDBOX SIMULATOR</div>
+      <h2 class="slide-title">Dual-Mode Architecture: Sandbox vs Live</h2>
+      <p class="slide-subtitle">
+        Zero-friction local development: auto-pivots to simulated execution when credentials are empty.
+      </p>
+
+      <div class="grid-2">
+        <div class="card" style="border-left: 4px solid var(--accent);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <h3>🧪 Simulation Sandbox Mode</h3>
+            <span class="pill accent">No API Keys Needed</span>
+          </div>
+          <p style="margin-bottom: 12px;">Triggered whenever <code>is_configured()</code> returns <code>False</code>:</p>
+          <ul style="font-size: 13px; color: var(--text-muted); line-height: 1.8; margin-left: 20px;">
+            <li>Simulates realistic snowflake IDs (e.g. <code>1896694935599354582</code>).</li>
+            <li>Generates valid-looking permalinks for IG (<code>/p/TxN5r_DOzBH/</code>) and Threads.</li>
+            <li>Verifies attached local file existence on disk via <code>_verify_media_exists()</code>.</li>
+            <li>Appends full execution audit entry to <code>output/posts_history.json</code> with <code>simulated: true</code>.</li>
+            <li>Allows thorough UI &amp; operational testing with zero danger of posting live spam.</li>
+          </ul>
+        </div>
+
+        <div class="card" style="border-left: 4px solid var(--success);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <h3>🟢 Live Production Mode</h3>
+            <span class="pill success">Auto-Activates</span>
+          </div>
+          <p style="margin-bottom: 12px;">Engages automatically when credentials exist in form or <code>.env</code>:</p>
+          <ul style="font-size: 13px; color: var(--text-muted); line-height: 1.8; margin-left: 20px;">
+            <li>Signs real HTTP requests with HMAC-SHA1 OAuth 1.0a or Bearer authorization.</li>
+            <li>Performs multi-part file uploads to official Twitter/Meta/TikTok media CDNs.</li>
+            <li>Creates official containers and executes immediate live publishing.</li>
+            <li>Captures upstream HTTP errors (401 Bad Token, 403 Permissions, 429 Rate Limit).</li>
+            <li>Stores upstream post IDs and live URLs in the history audit log.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 8: Connection Vault & Account Management -->
+    <div class="slide" data-slide="8">
+      <div class="slide-badge">CREDENTIAL SECURITY &bull; VAULT</div>
+      <h2 class="slide-title">Connection Vault &amp; Account Presets</h2>
+      <p class="slide-subtitle">
+        Organizing multiple social channels into campaign presets with masked token persistence.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>👥 Preset-Based Grouping (output/connections.json)</h3>
+          <p style="margin-bottom: 10px;">Binds multiple accounts under a single broadcast name:</p>
+          <div class="code-box" style="font-size:11.5px;">
+<span style="color:#e06c75;">"Crypto &amp; Financial News Network"</span>: {
+  <span style="color:#e5c07b;">"accounts"</span>: [
+    { <span style="color:#98c379;">"platform"</span>: <span style="color:#56b6c2;">"X (Twitter)"</span>, <span style="color:#98c379;">"account_name"</span>: <span style="color:#98c379;">"@CryptoAlertsDaily"</span> },
+    { <span style="color:#98c379;">"platform"</span>: <span style="color:#56b6c2;">"Instagram"</span>, <span style="color:#98c379;">"account_name"</span>: <span style="color:#98c379;">"@CryptoDailyDigest"</span> },
+    { <span style="color:#98c379;">"platform"</span>: <span style="color:#56b6c2;">"Threads"</span>, <span style="color:#98c379;">"account_name"</span>: <span style="color:#98c379;">"@CryptoDailyDigest"</span> },
+    { <span style="color:#98c379;">"platform"</span>: <span style="color:#56b6c2;">"Facebook"</span>, <span style="color:#98c379;">"account_name"</span>: <span style="color:#98c379;">"Crypto Market Pulse"</span> },
+    { <span style="color:#98c379;">"platform"</span>: <span style="color:#56b6c2;">"TikTok"</span>, <span style="color:#98c379;">"account_name"</span>: <span style="color:#98c379;">"@CryptoMarketPulse"</span> }
+  ]
+}
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🛡️ Credential Security &amp; Live Validation</h3>
+          <div style="display:flex; flex-direction:column; gap:12px; font-size:13px; color:var(--text-muted); line-height:1.6;">
+            <div>
+              <strong style="color:var(--text-main);">Live Health Check (POST /api/connections/validate)</strong><br>
+              Directly queries upstream identity endpoints (e.g. <code>api.twitter.com/2/users/me</code>, <code>graph.facebook.com/v20.0/{id}</code>) to verify token validity before publishing.
+            </div>
+            <div>
+              <strong style="color:var(--text-main);">Secret Masking (<code>_mask_secret</code>)</strong><br>
+              Secret keys longer than 6 characters display only the first 3 and last 3 characters (e.g. <code>key...xyz</code>) to prevent accidental shoulder-surfing leaks.
+            </div>
+            <div>
+              <strong style="color:var(--text-main);">CRUD API</strong><br>
+              Full REST API support: <code>GET /api/connections</code>, <code>POST /api/connections</code>, and <code>DELETE /api/connections/&lt;name&gt;</code>.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 9: Buffer-Style Dispatcher Engine -->
+    <div class="slide" data-slide="9">
+      <div class="slide-badge">MULTI-CHANNEL ENGINE &bull; DISPATCHER</div>
+      <h2 class="slide-title">Buffer-Style Dispatcher: Fanout &amp; Overrides</h2>
+      <p class="slide-subtitle">
+        Cross-posting engine handling per-platform content tailoring, scheduling, and draft storage.
+      </p>
+
+      <div class="grid-3">
+        <div class="card accented">
+          <div class="card-icon">⚡</div>
+          <h3>Simultaneous Fanout</h3>
+          <p>Dispatches single payload across all active accounts in the preset, collecting per-platform response status.</p>
+          <div style="margin-top:8px;">
+            <span class="pill success">All Passed &rarr; published</span>
+            <span class="pill warning">Some &rarr; partial_failure</span>
+          </div>
+        </div>
+
+        <div class="card accented">
+          <div class="card-icon">🎛️</div>
+          <h3>Per-Platform Overrides</h3>
+          <p>Pass custom text dictionaries:</p>
+          <div class="code-box" style="font-size:10.5px; margin-top:8px;">
+platform_customizations = {
+  <span style="color:#98c379;">"X (Twitter)"</span>: <span style="color:#98c379;">"Short tweet #btc"</span>,
+  <span style="color:#98c379;">"Instagram"</span>: <span style="color:#98c379;">"Long analysis..."</span>
+}
+          </div>
+          <p style="font-size:11.5px; color:var(--text-dim); margin-top:6px;">Universal text used if no override provided.</p>
+        </div>
+
+        <div class="card accented">
+          <div class="card-icon">📅</div>
+          <h3>Drafts &amp; Scheduling</h3>
+          <p>Lifecycle modes supported natively:</p>
+          <ul style="font-size:12px; color:var(--text-muted); line-height:1.7; margin-left:16px; margin-top:6px;">
+            <li><code>is_draft=1</code>: Stored in history with <code>status: "draft"</code>.</li>
+            <li><code>schedule_time="YYYY-MM-DD..."</code>: Stored with <code>status: "scheduled"</code>.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 10: How to Use the UI Features -->
+    <div class="slide" data-slide="10">
+      <div class="slide-badge">USER GUIDE &bull; STEP-BY-STEP WORKFLOW</div>
+      <h2 class="slide-title">UI Features &amp; Step-by-Step Operator Guide</h2>
+      <p class="slide-subtitle">
+        How operators interact with the Buffer-style publisher and connection manager.
+      </p>
+
+      <div class="grid-4">
+        <div class="card">
+          <div class="flow-step-num">1</div>
+          <h3 style="margin: 6px 0;">Configure Vault</h3>
+          <p>Open <code>/connection-handler</code>. Select preset or enter platform API credentials. Click <strong>Test &amp; Validate</strong>.</p>
+          <span class="pill accent">Connection Vault</span>
+        </div>
+
+        <div class="card">
+          <div class="flow-step-num">2</div>
+          <h3 style="margin: 6px 0;">Pick Channels</h3>
+          <p>Open <code>/publish-work</code>. Choose target connection preset or toggle individual channel chips (X, IG, Threads, FB, TikTok).</p>
+          <span class="pill info">Chip Selector</span>
+        </div>
+
+        <div class="card">
+          <div class="flow-step-num">3</div>
+          <h3 style="margin: 6px 0;">Compose &amp; Tailor</h3>
+          <p>Write universal post text. Review live character counters. Expand <strong>Platform Customizations</strong> to set network-specific text.</p>
+          <span class="pill success">Live Meters</span>
+        </div>
+
+        <div class="card">
+          <div class="flow-step-num">4</div>
+          <h3 style="margin: 6px 0;">Dispatch &amp; Audit</h3>
+          <p>Attach media files or choose existing uploads. Click <strong>Publish Now</strong>. Inspect permalinks in <strong>Publish History</strong>.</p>
+          <span class="pill accent">Instant Log</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 11: Interactive Live Character Counter Playground -->
+    <div class="slide" data-slide="11">
+      <div class="slide-badge">LIVE PLAYGROUND &bull; CHARACTER LIMIT ENGINE</div>
+      <h2 class="slide-title">Cross-Platform Character Meter</h2>
+      <p class="slide-subtitle">
+        Experience how the application dynamically monitors and enforces strict network boundaries in real time.
+      </p>
+
+      <div class="grid-2">
+        <div class="interactive-card">
+          <label style="display:block; font-size:13px; font-weight:600; margin-bottom:8px; color:var(--text-muted);">
+            Type or paste sample post content here:
+          </label>
+          <textarea id="demoInput" class="live-textarea" oninput="updateDemoCounters()" placeholder="Breaking: Bitcoin surges past key resistance levels as institutional volume hits new quarterly records. #crypto #finance"></textarea>
+          <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+            <button class="hdr-btn" onclick="insertSampleText(1)">Sample: Tweet</button>
+            <button class="hdr-btn" onclick="insertSampleText(2)">Sample: Thread (Long)</button>
+            <button class="hdr-btn" onclick="insertSampleText(3)">Sample: Over X Limit</button>
+          </div>
+        </div>
+
+        <div class="interactive-card" style="display:flex; flex-direction:column; justify-content:space-around;">
+          <div>
+            <div class="meter-row">
+              <strong>X (Twitter)</strong>
+              <span id="xCount">0 / 280</span>
+            </div>
+            <div class="meter-bar-bg"><div class="meter-bar-fill" id="xBar"></div></div>
+          </div>
+          <div>
+            <div class="meter-row">
+              <strong>Threads</strong>
+              <span id="thCount">0 / 500</span>
+            </div>
+            <div class="meter-bar-bg"><div class="meter-bar-fill" id="thBar"></div></div>
+          </div>
+          <div>
+            <div class="meter-row">
+              <strong>Instagram Caption</strong>
+              <span id="igCount">0 / 2,200</span>
+            </div>
+            <div class="meter-bar-bg"><div class="meter-bar-fill" id="igBar"></div></div>
+          </div>
+          <div>
+            <div class="meter-row">
+              <strong>TikTok Caption</strong>
+              <span id="ttCount">0 / 4,000</span>
+            </div>
+            <div class="meter-bar-bg"><div class="meter-bar-fill" id="ttBar"></div></div>
+          </div>
+          <div>
+            <div class="meter-row">
+              <strong>Facebook Page</strong>
+              <span id="fbCount">0 / 63,206</span>
+            </div>
+            <div class="meter-bar-bg"><div class="meter-bar-fill" id="fbBar"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 12: Interactive Social Dispatch Simulator -->
+    <div class="slide" data-slide="12">
+      <div class="slide-badge">APP SIMULATOR &bull; LIVE DISPATCH ENGINE</div>
+      <h2 class="slide-title">Interactive Dispatch Simulator</h2>
+      <p class="slide-subtitle">
+        Simulate fanout broadcasting right inside this presentation without running local backend code.
+      </p>
+
+      <div class="grid-2">
+        <div class="sim-box">
+          <div style="font-size:12.5px; font-weight:600; color:var(--text-muted);">Select Target Channels:</div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <div class="channel-chip selected" onclick="toggleSimChannel(this, 'X (Twitter)')"><span class="dot"></span> 𝕏 Twitter</div>
+            <div class="channel-chip selected" onclick="toggleSimChannel(this, 'Instagram')"><span class="dot"></span> 📸 Instagram</div>
+            <div class="channel-chip selected" onclick="toggleSimChannel(this, 'Threads')"><span class="dot"></span> 🧵 Threads</div>
+            <div class="channel-chip selected" onclick="toggleSimChannel(this, 'Facebook')"><span class="dot"></span> 📘 Facebook</div>
+            <div class="channel-chip selected" onclick="toggleSimChannel(this, 'TikTok')"><span class="dot"></span> 🎵 TikTok</div>
+          </div>
+
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <button class="sim-btn" onclick="executeSimDispatch('publish')">
+              <span>🚀</span> Dispatch Broadcast
+            </button>
+            <button class="sim-btn" style="background:#0284c7;" onclick="executeSimDispatch('schedule')">
+              <span>📅</span> Schedule Post
+            </button>
+            <button class="sim-btn" style="background:#475569;" onclick="executeSimDispatch('draft')">
+              <span>💾</span> Save Draft
+            </button>
+          </div>
+
+          <div class="sim-result-log" id="simDispatchLog">
+[Console Ready] Select channels and click "Dispatch Broadcast" to simulate PublisherManager execution.
+          </div>
+        </div>
+
+        <div class="card" style="display:flex; flex-direction:column; justify-content:space-between;">
+          <div>
+            <h3>Simulated Audit Record (output/posts_history.json)</h3>
+            <p style="margin-bottom:10px;">Generated JSON record for the current operation:</p>
+            <div class="code-box" id="simAuditBox" style="font-size:11px; max-height:220px;">
+// Execution payload will be rendered here upon dispatch...
+            </div>
+          </div>
+          <div style="font-size:11.5px; color:var(--text-dim); margin-top:8px;">
+            Matches the exact data structure saved to <code>output/posts_history.json</code>.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 13: REST API Reference & Automation -->
+    <div class="slide" data-slide="13">
+      <div class="slide-badge">DEVELOPER REFERENCE &bull; REST API SPECIFICATION</div>
+      <h2 class="slide-title">RESTful API Endpoints &amp; Automation</h2>
+      <p class="slide-subtitle">
+        Full programmatic interface for triggering posts from CI/CD, webhooks, or scheduled scripts.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>Publishing &amp; Vault Endpoints</h3>
+          <div class="code-box" style="font-size:11px; line-height:1.7;">
+<span style="color:#e06c75;">POST</span> /api/publish-work          <span style="color:#5c6370;"># Multipart dispatch to channels</span>
+<span style="color:#98c379;">GET</span>  /api/posts/history         <span style="color:#5c6370;"># Audit logs (?status=published|draft)</span>
+<span style="color:#98c379;">GET</span>  /api/available-images      <span style="color:#5c6370;"># Retrieve media uploads</span>
+<span style="color:#98c379;">GET</span>  /api/connections           <span style="color:#5c6370;"># Retrieve saved presets</span>
+<span style="color:#e06c75;">POST</span> /api/connections           <span style="color:#5c6370;"># Create / update account preset</span>
+<span style="color:#e06c75;">POST</span> /api/connections/validate  <span style="color:#5c6370;"># Live test account credentials</span>
+<span style="color:#e06c75;">DELETE</span> /api/connections/&lt;name&gt;  <span style="color:#5c6370;"># Remove preset</span>
+          </div>
+          <p style="font-size:12px; color:var(--text-dim); margin-top:8px;">
+            All endpoints enforce <code>application/json</code> or multipart form encoding.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>Automated cURL Broadcast Example</h3>
+          <div class="code-box" style="font-size:10.5px; line-height:1.6;">
+<span style="color:#5c6370;"># Trigger cross-platform dispatch with media attachment</span>
+curl -X POST http://127.0.0.1:5000/api/publish-work \
+  -F <span style="color:#98c379;">"connection_name=Crypto &amp; Financial News Network"</span> \
+  -F <span style="color:#98c379;">"content=Market Update: All key indicators positive today! 📈"</span> \
+  -F <span style="color:#98c379;">"existing_media_paths=[\"output/uploads/chart.png\"]"</span> \
+  -F <span style="color:#98c379;">'platform_customizations={"X (Twitter)": "Quick update #crypto"}'</span>
+          </div>
+          <p style="font-size:12px; color:var(--text-muted); margin-top:10px;">
+            Can be plugged directly into crontabs, GitHub Actions, or webhook handlers.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLIDE 14: Extensibility: Adding a New Social Platform -->
+    <div class="slide" data-slide="14">
+      <div class="slide-badge">EXTENSIBILITY &bull; DEVELOPER GUIDE</div>
+      <h2 class="slide-title">How to Add a New Social Platform in 3 Steps</h2>
+      <p class="slide-subtitle">
+        Clean architectural hooks allow plugging in LinkedIn, YouTube, or Bluesky in minutes.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>1. Implement BasePublisher Subclass</h3>
+          <div class="code-box" style="font-size:11px; line-height:1.6;">
+<span style="color:#c678dd;">class</span> <span style="color:#61afef;">LinkedInPublisher</span>(BasePublisher):
+    <span style="color:#c678dd;">def</span> <span style="color:#61afef;">__init__</span>(self, account_name, credentials=<span style="color:#d19a66;">None</span>):
+        super().__init__(<span style="color:#98c379;">"LinkedIn"</span>, account_name, credentials)
+        self.access_token = self.credentials.get(<span style="color:#98c379;">"access_token"</span>)
+
+    <span style="color:#c678dd;">def</span> <span style="color:#61afef;">publish</span>(self, content, media_paths=<span style="color:#d19a66;">None</span>, options=<span style="color:#d19a66;">None</span>):
+        <span style="color:#c678dd;">if</span> <span style="color:#c678dd;">not</span> self.is_configured():
+            <span style="color:#c678dd;">return</span> PublishResult(<span style="color:#98c379;">"LinkedIn"</span>, self.account_name, <span style="color:#d19a66;">True</span>, simulated=<span style="color:#d19a66;">True</span>)
+        <span style="color:#5c6370;"># Upstream REST call to /v2/ugcPosts</span>
+        ...
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>2. Register in PublisherManager</h3>
+          <div class="code-box" style="font-size:11px; line-height:1.6;">
+<span style="color:#5c6370;"># publisher/manager.py</span>
+<span style="color:#c678dd;">def</span> <span style="color:#61afef;">create_publisher</span>(self, platform, account_name, credentials):
+    norm = self.normalize_platform_name(platform)
+    <span style="color:#c678dd;">if</span> norm == <span style="color:#98c379;">"LinkedIn"</span>:
+        <span style="color:#c678dd;">return</span> LinkedInPublisher(account_name, credentials)
+    ...
+          </div>
+          <h3 style="margin-top:14px;">3. Add UI Pill &amp; Limits</h3>
+          <p style="font-size:12.5px; color:var(--text-muted); line-height:1.6;">
+            Add a <code>&lt;div class="channel-pill"&gt;LinkedIn&lt;/div&gt;</code> and a 3,000-character limit counter in <code>templates/publish_work.html</code>.
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </div> <!-- End Deck Container -->
+
+  <!-- Bottom Floating Control Dock -->
+  <div class="dock-container">
+    <button class="dock-btn" id="prevBtn" onclick="changeSlide(-1)" title="Previous Slide (←)">◀</button>
+    <div class="slide-indicator" id="slideIndicator">01 / 14</div>
+    <button class="dock-btn" id="nextBtn" onclick="changeSlide(1)" title="Next Slide (→ / Space)">▶</button>
+    <div style="width: 1px; height: 16px; background: var(--border-color); margin: 0 4px;"></div>
+    <div class="kbd-tip">
+      <kbd>&larr;</kbd> <kbd>&rarr;</kbd> Navigate
+    </div>
+  </div>
+
+  <!-- Slides Overview Modal (Triggered by 'O') -->
+  <div class="overview-modal" id="overviewModal" onclick="closeOverviewIfOutside(event)">
+    <div class="overview-grid" id="overviewGrid">
+      <!-- Injected via JS -->
+    </div>
+  </div>
+
+  <!-- Keyboard Help Modal -->
+  <div class="overview-modal" id="helpModal" onclick="closeHelpIfOutside(event)">
+    <div class="card" style="max-width: 480px; width:100%;" onclick="event.stopPropagation()">
+      <h3 style="margin-bottom:14px;">⌨️ Keyboard Shortcuts</h3>
+      <div style="display:flex; flex-direction:column; gap:10px; font-size:13px; color:var(--text-muted);">
+        <div style="display:flex; justify-content:space-between;">
+          <span>Next Slide</span>
+          <span><kbd>&rarr;</kbd> or <kbd>Space</kbd> or <kbd>PageDn</kbd></span>
+        </div>
+        <div style="display:flex; justify-content:space-between;">
+          <span>Previous Slide</span>
+          <span><kbd>&larr;</kbd> or <kbd>PageUp</kbd></span>
+        </div>
+        <div style="display:flex; justify-content:space-between;">
+          <span>All Slides Overview</span>
+          <span><kbd>O</kbd></span>
+        </div>
+        <div style="display:flex; justify-content:space-between;">
+          <span>Toggle Fullscreen</span>
+          <span><kbd>F</kbd></span>
+        </div>
+        <div style="display:flex; justify-content:space-between;">
+          <span>Export to PDF / Print</span>
+          <span><kbd>P</kbd> or <kbd>Cmd+P</kbd></span>
+        </div>
+        <div style="display:flex; justify-content:space-between;">
+          <span>Jump to First / Last</span>
+          <span><kbd>Home</kbd> / <kbd>End</kbd></span>
+        </div>
+      </div>
+      <button class="sim-btn" style="margin-top:18px; width:100%; justify-content:center;" onclick="toggleHelpModal()">
+        Got It
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // Slide Deck State
+    let currentSlide = 1;
+    const slides = document.querySelectorAll('.slide');
+    const totalSlides = slides.length;
+
+    let selectedSimChannels = ['X (Twitter)', 'Instagram', 'Threads', 'Facebook', 'TikTok'];
+
+    function toggleSimChannel(el, channelName) {
+      el.classList.toggle('selected');
+      if (el.classList.contains('selected')) {
+        if (!selectedSimChannels.includes(channelName)) selectedSimChannels.push(channelName);
+      } else {
+        selectedSimChannels = selectedSimChannels.filter(c => c !== channelName);
+      }
+    }
+
+    function appendDispatchLog(msg) {
+      const log = document.getElementById('simDispatchLog');
+      const time = new Date().toLocaleTimeString();
+      log.innerHTML += `<div><span style="color:#64748b;">[${time}]</span> ${msg}</div>`;
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function executeSimDispatch(mode) {
+      if (selectedSimChannels.length === 0) {
+        appendDispatchLog("<span style=\"color:#ef4444;\">Error:</span> Select at least one channel first.");
+        return;
+      }
+
+      const postId = "sim_" + Math.random().toString(36).substring(2, 10);
+      const timestamp = new Date().toISOString();
+      const contentText = document.getElementById('demoInput') ? document.getElementById('demoInput').value || "Breaking Market Alert! 🚀" : "Breaking Market Alert! 🚀";
+
+      if (mode === 'draft') {
+        appendDispatchLog(`<span style="color:#fbbf24;">✓ Saved as Draft</span> (ID: ${postId}) across ${selectedSimChannels.length} account(s).`);
+        const auditPayload = {
+          id: postId,
+          created_at: timestamp,
+          status: "draft",
+          content: contentText,
+          accounts_count: selectedSimChannels.length,
+          accounts: selectedSimChannels
+        };
+        document.getElementById('simAuditBox').textContent = JSON.stringify(auditPayload, null, 2);
+        return;
+      }
+
+      if (mode === 'schedule') {
+        const schedTime = new Date(Date.now() + 86400000).toISOString().slice(0, 16).replace('T', ' ') + " UTC";
+        appendDispatchLog(`<span style="color:#38bdf8;">✓ Scheduled</span> for ${schedTime} across ${selectedSimChannels.length} account(s).`);
+        const auditPayload = {
+          id: postId,
+          created_at: timestamp,
+          schedule_time: schedTime,
+          status: "scheduled",
+          content: contentText,
+          accounts_count: selectedSimChannels.length,
+          accounts: selectedSimChannels
+        };
+        document.getElementById('simAuditBox').textContent = JSON.stringify(auditPayload, null, 2);
+        return;
+      }
+
+      // Immediate Publish
+      appendDispatchLog(`Publishing across ${selectedSimChannels.length} channel(s)...`);
+      const results = {};
+      selectedSimChannels.forEach(ch => {
+        const fakeId = Math.floor(100000000000000000 + Math.random() * 900000000000000000).toString();
+        let permalink = "";
+        if (ch.includes("Twitter")) permalink = `https://x.com/CryptoAlerts/status/${fakeId}`;
+        else if (ch === "Instagram") permalink = `https://instagram.com/p/${Math.random().toString(36).substring(2, 12)}/`;
+        else if (ch === "Threads") permalink = `https://threads.net/@user/post/${Math.random().toString(36).substring(2, 12)}`;
+        else if (ch === "Facebook") permalink = `https://facebook.com/posts/${fakeId}`;
+        else permalink = `https://tiktok.com/@creator/video/${fakeId}`;
+
+        results[ch] = {
+          platform: ch,
+          success: true,
+          post_id: fakeId,
+          post_url: permalink,
+          simulated: true,
+          timestamp: timestamp
+        };
+        appendDispatchLog(`<span style="color:#34d399;">✓ ${ch}</span>: Dispatched (${permalink})`);
+      });
+
+      appendDispatchLog(`<span style="color:#c4b5fd; font-weight:bold;">★ Audit saved to output/posts_history.json</span> (status: published)`);
+
+      const auditPayload = {
+        id: postId,
+        created_at: timestamp,
+        status: "published",
+        content: contentText,
+        media_files: ["market_chart.png"],
+        results: results
+      };
+      document.getElementById('simAuditBox').textContent = JSON.stringify(auditPayload, null, 2);
+    }
+
+    function updateSlide() {
+      slides.forEach((slide, idx) => {
+        if (idx + 1 === currentSlide) {
+          slide.classList.add('active');
+        } else {
+          slide.classList.remove('active');
+        }
+      });
+
+      const pad = (n) => n < 10 ? '0' + n : n;
+      document.getElementById('slideIndicator').textContent = `${pad(currentSlide)} / ${pad(totalSlides)}`;
+
+      const progress = ((currentSlide - 1) / (totalSlides - 1)) * 100;
+      document.getElementById('progressBar').style.width = `${progress}%`;
+
+      document.getElementById('prevBtn').disabled = currentSlide === 1;
+      document.getElementById('nextBtn').disabled = currentSlide === totalSlides;
+    }
+
+    function changeSlide(direction) {
+      const target = currentSlide + direction;
+      if (target >= 1 && target <= totalSlides) {
+        currentSlide = target;
+        updateSlide();
+      }
+    }
+
+    function goToSlide(n) {
+      if (n >= 1 && n <= totalSlides) {
+        currentSlide = n;
+        updateSlide();
+        closeOverview();
+      }
+    }
+
+    // Keyboard Navigation
+    window.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault();
+        changeSlide(1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        changeSlide(-1);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        goToSlide(1);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        goToSlide(totalSlides);
+      } else if (e.key === 'o' || e.key === 'O') {
+        toggleOverview();
+      } else if (e.key === 'f' || e.key === 'F') {
+        toggleFullScreen();
+      } else if (e.key === 'p' || e.key === 'P') {
+        if (!e.metaKey && !e.ctrlKey) {
+          window.print();
+        }
+      } else if (e.key === 'Escape') {
+        closeOverview();
+        closeHelp();
+      }
+    });
+
+    // Touch Swipe Gestures
+    let touchStartX = 0;
+    let touchEndX = 0;
+    document.addEventListener('touchstart', (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+    }, { passive: true });
+
+    document.addEventListener('touchend', (e) => {
+      touchEndX = e.changedTouches[0].screenX;
+      handleSwipe();
+    }, { passive: true });
+
+    function handleSwipe() {
+      const diff = touchStartX - touchEndX;
+      if (Math.abs(diff) > 50) {
+        if (diff > 0) {
+          changeSlide(1);
+        } else {
+          changeSlide(-1);
+        }
+      }
+    }
+
+    // Overview Modal
+    function buildOverviewGrid() {
+      const grid = document.getElementById('overviewGrid');
+      grid.innerHTML = '';
+      slides.forEach((slide, i) => {
+        const titleEl = slide.querySelector('.slide-title');
+        const title = titleEl ? titleEl.textContent.trim().replace(/\s+/g, ' ') : `Slide ${i + 1}`;
+        const card = document.createElement('div');
+        card.className = `overview-card ${i + 1 === currentSlide ? 'current' : ''}`;
+        card.onclick = () => goToSlide(i + 1);
+        card.innerHTML = `
+          <div class="overview-num">SLIDE ${i + 1 < 10 ? '0' + (i + 1) : i + 1}</div>
+          <div class="overview-title">${title}</div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function toggleOverview() {
+      const modal = document.getElementById('overviewModal');
+      if (modal.classList.contains('open')) {
+        closeOverview();
+      } else {
+        buildOverviewGrid();
+        modal.classList.add('open');
+      }
+    }
+
+    function closeOverview() {
+      document.getElementById('overviewModal').classList.remove('open');
+    }
+
+    function closeOverviewIfOutside(e) {
+      if (e.target.id === 'overviewModal') closeOverview();
+    }
+
+    function toggleHelpModal() {
+      const modal = document.getElementById('helpModal');
+      modal.classList.toggle('open');
+    }
+
+    function closeHelp() {
+      document.getElementById('helpModal').classList.remove('open');
+    }
+
+    function closeHelpIfOutside(e) {
+      if (e.target.id === 'helpModal') closeHelp();
+    }
+
+    function toggleFullScreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+      }
+    }
+
+    // Live Character Counters
+    function updateDemoCounters() {
+      const text = document.getElementById('demoInput').value || '';
+      const len = text.length;
+
+      updateMeter('x', len, 280);
+      updateMeter('th', len, 500);
+      updateMeter('ig', len, 2200);
+      updateMeter('tt', len, 4000);
+      updateMeter('fb', len, 63206);
+    }
+
+    function updateMeter(key, current, max) {
+      const countEl = document.getElementById(`${key}Count`);
+      const barEl = document.getElementById(`${key}Bar`);
+      if (!countEl || !barEl) return;
+
+      countEl.textContent = `${current.toLocaleString()} / ${max.toLocaleString()}`;
+      const pct = Math.min((current / max) * 100, 100);
+      barEl.style.width = `${pct}%`;
+
+      if (current > max) {
+        barEl.classList.add('over');
+        countEl.style.color = '#ef4444';
+        countEl.style.fontWeight = 'bold';
+      } else {
+        barEl.classList.remove('over');
+        countEl.style.color = '';
+        countEl.style.fontWeight = '';
+      }
+    }
+
+    function insertSampleText(type) {
+      const el = document.getElementById('demoInput');
+      if (type === 1) {
+        el.value = "⚡ Bitcoin broke above $68,000 as weekly institutional crypto inflow hit an all-time high of $2.45B. Ethereum and Solana also registered double-digit gains. Full breakdown coming up! #Bitcoin #Crypto #Finance";
+      } else if (type === 2) {
+        el.value = "Market Wrap Daily Briefing:\n\n1. Crude Oil consolidated around $78/barrel amidst OPEC+ supply quota deliberations.\n2. Gold held firm above $2,500/oz as investors anticipated interest rate decisions from global central banks.\n3. The S&P 500 and Nasdaq posted modest intraday rallies driven by strong enterprise tech quarterly guidance.\n\nKeep an eye on key commodity benchmarks throughout the remaining trading sessions.";
+      } else if (type === 3) {
+        el.value = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ".repeat(7) + " This sample string deliberately exceeds 280 characters to demonstrate how the Twitter counter alerts the user in red when the network character boundary has been reached or breached.";
+      }
+      updateDemoCounters();
+    }
+
+    // Initialize Default State
+    document.addEventListener('DOMContentLoaded', () => {
+      updateDemoCounters();
+      updateSlide();
+    });
+  </script>
+</body>
+</html>
