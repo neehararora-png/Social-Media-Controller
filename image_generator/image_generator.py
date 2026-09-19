@@ -64,10 +64,17 @@ class ImageGenerator:
             candidates.extend([
                 "C:/Windows/Fonts/segoeuib.ttf",
                 "C:/Windows/Fonts/arialbd.ttf",
+                "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+                "/Library/Fonts/Arial Bold.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
             ])
         candidates.extend([
             "C:/Windows/Fonts/segoeui.ttf",
             "C:/Windows/Fonts/arial.ttf",
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+            "/Library/Fonts/Arial.ttf",
+            "/System/Library/Fonts/Helvetica.ttc",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         ])
         for path in candidates:
             if os.path.exists(path):
@@ -75,7 +82,10 @@ class ImageGenerator:
                     return ImageFont.truetype(path, size)
                 except Exception:
                     pass
-        return ImageFont.load_default()
+        try:
+            return ImageFont.load_default(size=size)
+        except Exception:
+            return ImageFont.load_default()
 
     @staticmethod
     def _hex_to_rgb(value: str):
